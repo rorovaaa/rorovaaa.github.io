@@ -1,16 +1,18 @@
-name = "translater"
-main = "./index.html"  # Точка входа для статического сайта
+name = "zrzrzr"
+main = "./index.html"  # Главная точка входа
 compatibility_date = "2024-07-02"
+node_compat = true    # Включить совместимость с Node.js
 
 [site]
-bucket = "./"          # Корневая директория проекта
-entry-point = "."      # Точка входа для деплоя
+bucket = "./"         # Корневая директория проекта
 
+# Правила для статических файлов
 [[rules]]
-globs = ["**/*"]       # Включаем все файлы
-headers = { "Cache-Control" = "public, max-age=14400" }
+globs = ["**/*"]
+headers = { 
+  "Cache-Control" = "public, max-age=14400",
+  "Content-Type" = { "html" = "text/html", "css" = "text/css", "js" = "application/javascript" }
+}
 
-# Для обработки моделей и лейблов (если нужно)
 [build]
-command = "echo 'No build needed'"  # Или ваша команда сборки
-upload_dir = "models"              # Директория с моделями
+command = "echo 'Static site, no build needed'"

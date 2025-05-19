@@ -1,0 +1,3 @@
+name = "my-worker"
+main = "index.html"  # Путь к вашему Worker-скрипту
+compatibility_date = "2025-05-19"

@@ -2,30 +2,28 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NeuroTalkSignToText - Переводчик жестовых языков</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@latest/dist/ort.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <meta http-equiv="Content-Security-Policy" 
+          content="default-src 'self' https://telegram.org; 
+                   script-src 'self' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com 'unsafe-eval'; 
+                   connect-src 'self' blob:;
+                   media-src 'self' blob:;
+                   style-src 'self' https://fonts.googleapis.com 'unsafe-inline';
+                   font-src 'self' https://fonts.gstatic.com">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        :root {
-            --safe-area-inset-top: env(safe-area-inset-top);
-            --safe-area-inset-bottom: env(safe-area-inset-bottom);
-        }
-
         body { 
             font-family: 'Inter', sans-serif; 
-            background-color: #f8fafc;
-            padding-top: var(--safe-area-inset-top);
-            padding-bottom: var(--safe-area-inset-bottom);
+            background-color: #f8fafc; 
         }
-
         .gradient-bg { 
             background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); 
         }
-
         .video-container { 
             position: relative; 
             padding-bottom: 56.25%; 
@@ -34,7 +32,6 @@
             border-radius: 12px; 
             background-color: #000; 
         }
-
         .video-container video, 
         .video-container canvas { 
             position: absolute; 
@@ -44,7 +41,6 @@
             height: 100%; 
             object-fit: cover; 
         }
-
         .processing-overlay { 
             position: absolute; 
             top: 0; 
@@ -57,12 +53,9 @@
             align-items: center; 
             color: white; 
         }
-
-        @media (max-width: 768px) {
-            .video-container {
-                height: 50vh;
-                padding-bottom: 0;
-            }
+        #processing-video,
+        #processing-canvas {
+            display: none;
         }
     </style>
 </head>
@@ -74,9 +67,6 @@
                     <i class="fas fa-hands-helping text-3xl"></i>
                     <h1 class="text-2xl font-bold">NeuroTalkSignToText</h1>
                 </div>
-                <button onclick="Telegram.WebApp.close()" class="text-white">
-                    <i class="fas fa-times"></i>
-                </button>
             </div>
             <div class="mt-16 mb-12 text-center">
                 <h2 class="text-4xl md:text-5xl font-bold mb-4">Переводчик жестовых языков</h2>
@@ -109,8 +99,13 @@
                             </div>
                         </div>
                         <div class="video-container">
-                            <video id="input-video" autoplay muted playsinline class="hidden"></video>
+                            <!-- Видео для отображения пользователю -->
+                            <video id="user-video" autoplay muted playsinline class="hidden"></video>
+                            
+                            <!-- Скрытые элементы для обработки -->
+                            <video id="processing-video" autoplay muted playsinline class="hidden"></video>
                             <canvas id="processing-canvas"></canvas>
+                            
                             <div id="video-placeholder" class="absolute inset-0 flex flex-col items-center justify-center bg-gray-100">
                                 <i class="fas fa-video-slash text-4xl mb-4 text-gray-400"></i>
                                 <button id="start-camera-btn" class="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition">
@@ -158,27 +153,22 @@
         </div>
     </main>
 
-    <button id="send-btn" class="fixed bottom-6 right-6 bg-indigo-600 text-white p-4 rounded-full shadow-xl">
-        <i class="fas fa-paper-plane"></i>
-    </button>
-
     <script>
-        const tg = Telegram.WebApp;
-        tg.expand();
-        tg.enableClosingConfirmation();
-
         document.addEventListener('DOMContentLoaded', () => {
+            Telegram.WebApp.ready();
+            Telegram.WebApp.expand();
+
             const MODEL_CONFIG = {
                 RSL: {
-                    path: './models/rsl_model.onnx',
-                    labels: './labels/RSL_class_list.txt',
+                    path: 'models/rsl_model.onnx',
+                    labels: 'labels/RSL_class_list.txt',
                     inputName: 'actual_input_1',
                     inputShape: [1, 3, 32, 224, 224],
                     frameBufferSize: 32
                 },
                 ASL: {
-                    path: './models/asl_model.onnx',
-                    labels: './labels/h5_classes.txt',
+                    path: 'models/asl_model.onnx',
+                    labels: 'labels/h5_classes.txt',
                     inputName: 'input',
                     inputShape: [1, 1, 28, 28]
                 }
@@ -187,7 +177,8 @@
             let currentModel = null;
             let currentLabels = [];
             let isProcessing = false;
-            let videoStream = null;
+            let userStream = null;
+            let processingStream = null;
             let currentModelType = 'RSL';
             let confidenceThreshold = 0.7;
             let frameBuffer = [];
@@ -195,8 +186,9 @@
             let currentCameraId = '';
 
             const elements = {
-                video: document.getElementById('input-video'),
-                canvas: document.getElementById('processing-canvas'),
+                userVideo: document.getElementById('user-video'),
+                processingVideo: document.getElementById('processing-video'),
+                processingCanvas: document.getElementById('processing-canvas'),
                 startBtn: document.getElementById('start-camera-btn'),
                 output: document.getElementById('output'),
                 processing: document.getElementById('processing-overlay'),
@@ -210,6 +202,11 @@
             };
 
             async function initCameras() {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+                    Telegram.WebApp.showAlert("Ваш браузер не поддерживает доступ к устройствам");
+                    return;
+                }
+
                 try {
                     const devices = await navigator.mediaDevices.enumerateDevices();
                     cameras = devices.filter(device => device.kind === 'videoinput');
@@ -218,7 +215,7 @@
                     }
                 } catch (error) {
                     console.error('Ошибка получения списка камер:', error);
-                    tg.showAlert('Ошибка доступа к камерам');
+                    Telegram.WebApp.showAlert("Ошибка доступа к камерам");
                 }
             }
 
@@ -231,6 +228,7 @@
                         : text.split('\n').map(line => line.split(' ')[1]?.trim() || 'Unknown');
                 } catch (error) {
                     console.error('Ошибка загрузки меток:', error);
+                    Telegram.WebApp.showAlert("Ошибка загрузки меток классов");
                     return [];
                 }
             }
@@ -239,6 +237,7 @@
                 try {
                     elements.processing.style.display = 'flex';
                     currentLabels = await loadLabels(modelType);
+                    
                     if (currentLabels.length === 0) {
                         throw new Error('Не удалось загрузить метки классов');
                     }
@@ -248,7 +247,7 @@
                     return true;
                 } catch (error) {
                     console.error(`Ошибка загрузки модели ${modelType}:`, error);
-                    tg.showAlert(`Ошибка загрузки модели: ${error.message}`);
+                    Telegram.WebApp.showAlert(`Ошибка загрузки модели: ${error.message}`);
                     return false;
                 } finally {
                     elements.processing.style.display = 'none';
@@ -257,20 +256,30 @@
 
             function preprocessFrame() {
                 const config = MODEL_CONFIG[currentModelType];
-                const ctx = elements.canvas.getContext('2d');
+                const ctx = elements.processingCanvas.getContext('2d');
+
+                // Настройка размеров canvas в зависимости от модели
+                const targetWidth = currentModelType === 'RSL' ? 224 : 28;
+                const targetHeight = currentModelType === 'RSL' ? 224 : 28;
+
+                elements.processingCanvas.width = targetWidth;
+                elements.processingCanvas.height = targetHeight;
+
+                // Отрисовка кадра из processing-video в canvas
+                ctx.drawImage(
+                    elements.processingVideo,
+                    0, 0, elements.processingVideo.videoWidth, elements.processingVideo.videoHeight,
+                    0, 0, targetWidth, targetHeight
+                );
 
                 if (currentModelType === 'RSL') {
-                    elements.canvas.width = 224;
-                    elements.canvas.height = 224;
-                    ctx.drawImage(elements.video, 0, 0, 224, 224);
-
-                    const imageData = ctx.getImageData(0, 0, 224, 224);
-                    const frameData = new Float32Array(3 * 224 * 224);
+                    const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+                    const frameData = new Float32Array(3 * targetWidth * targetHeight);
 
                     for (let i = 0; i < imageData.data.length; i += 4) {
                         frameData[i / 4] = imageData.data[i] / 255;
-                        frameData[i / 4 + 224 * 224] = imageData.data[i + 1] / 255;
-                        frameData[i / 4 + 2 * 224 * 224] = imageData.data[i + 2] / 255;
+                        frameData[i / 4 + targetWidth * targetHeight] = imageData.data[i + 1] / 255;
+                        frameData[i / 4 + 2 * targetWidth * targetHeight] = imageData.data[i + 2] / 255;
                     }
 
                     frameBuffer.push(frameData);
@@ -281,19 +290,15 @@
                     const tensorData = new Float32Array(config.inputShape.reduce((a, b) => a * b, 1));
                     let offset = 0;
                     for (let i = 0; i < config.frameBufferSize; i++) {
-                        const frame = frameBuffer[i] || new Float32Array(3 * 224 * 224).fill(0);
+                        const frame = frameBuffer[i] || new Float32Array(3 * targetWidth * targetHeight).fill(0);
                         tensorData.set(frame, offset);
                         offset += frame.length;
                     }
 
                     return new ort.Tensor('float32', tensorData, config.inputShape);
                 } else {
-                    elements.canvas.width = 28;
-                    elements.canvas.height = 28;
-                    ctx.drawImage(elements.video, 0, 0, 28, 28);
-
-                    const imageData = ctx.getImageData(0, 0, 28, 28);
-                    const data = new Float32Array(1 * 1 * 28 * 28);
+                    const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+                    const data = new Float32Array(1 * 1 * targetWidth * targetHeight);
 
                     for (let i = 0; i < imageData.data.length; i += 4) {
                         const grayValue = (imageData.data[i] + imageData.data[i + 1] + imageData.data[i + 2]) / 3;
@@ -346,22 +351,48 @@
 
             async function startCamera(deviceId = '') {
                 try {
-                    const constraints = {
+                    const permission = await Telegram.WebApp.requestPermission('camera');
+                    
+                    if (permission !== 'granted') {
+                        Telegram.WebApp.showAlert('Для работы приложения требуется доступ к камере!');
+                        return;
+                    }
+
+                    // Настройки для пользовательского видео
+                    const userConstraints = {
                         video: {
                             deviceId: deviceId ? { exact: deviceId } : undefined,
-                            width: { ideal: currentModelType === 'RSL' ? 224 : 28 },
-                            height: { ideal: currentModelType === 'RSL' ? 224 : 28 },
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 },
                             facingMode: 'user'
                         }
                     };
 
-                    if (tg.platform !== 'unknown') {
-                        await tg.requestWriteAccess();
-                    }
+                    // Настройки для обработки видео
+                    const processingConstraints = {
+                        video: {
+                            deviceId: deviceId ? { exact: deviceId } : undefined,
+                            width: { ideal: currentModelType === 'RSL' ? 224 : 28 },
+                            height: { ideal: currentModelType === 'RSL' ? 224 : 28 },
+                            frameRate: { ideal: 30 }
+                        }
+                    };
 
-                    videoStream = await navigator.mediaDevices.getUserMedia(constraints);
-                    elements.video.srcObject = videoStream;
-                    elements.video.classList.remove('hidden');
+                    // Остановка предыдущих потоков
+                    if (userStream) userStream.getTracks().forEach(track => track.stop());
+                    if (processingStream) processingStream.getTracks().forEach(track => track.stop());
+
+                    // Запуск двух видеопотоков
+                    userStream = await navigator.mediaDevices.getUserMedia(userConstraints);
+                    processingStream = await navigator.mediaDevices.getUserMedia(processingConstraints);
+
+                    // Отображение пользовательского видео
+                    elements.userVideo.srcObject = userStream;
+                    elements.userVideo.classList.remove('hidden');
+                    
+                    // Подключение потока для обработки
+                    elements.processingVideo.srcObject = processingStream;
+                    
                     document.getElementById('video-placeholder').classList.add('hidden');
 
                     if (await initializeModel(currentModelType)) {
@@ -370,12 +401,13 @@
                     }
                 } catch (error) {
                     console.error('Ошибка доступа к камере:', error);
-                    tg.showAlert('Доступ к камере запрещен');
+                    Telegram.WebApp.showAlert(`Ошибка: ${error.message}`);
                 }
             }
 
-            // Обработчики событий
-            elements.startBtn.addEventListener('click', () => startCamera());
+            elements.startBtn.addEventListener('click', async () => {
+                await startCamera();
+            });
 
             elements.switchCamera.addEventListener('click', async () => {
                 if (cameras.length < 2) return;
@@ -384,11 +416,6 @@
                 const newIndex = (currentIndex + 1) % cameras.length;
                 currentCameraId = cameras[newIndex].deviceId;
 
-                if (videoStream) {
-                    videoStream.getTracks().forEach(track => track.stop());
-                    elements.video.srcObject = null;
-                }
-
                 await startCamera(currentCameraId);
             });
 
@@ -396,11 +423,6 @@
                 isProcessing = false;
                 currentModelType = this.value;
                 frameBuffer = [];
-
-                if (videoStream) {
-                    videoStream.getTracks().forEach(track => track.stop());
-                    elements.video.srcObject = null;
-                }
 
                 await startCamera(currentCameraId);
             });
@@ -431,21 +453,11 @@
                     });
             });
 
-            // Обработчик для кнопки отправки
-            document.getElementById('send-btn').addEventListener('click', () => {
-                const text = Array.from(elements.output.children)
-                    .map(el => el.textContent)
-                    .reverse()
-                    .join('\n');
-                
-                if (text.trim()) {
-                    tg.sendData(text);
-                    tg.close();
-                }
+            Telegram.WebApp.onEvent('viewportChanged', () => {
+                Telegram.WebApp.expand();
             });
 
             initCameras();
-            tg.ready();
         });
     </script>
 </body>

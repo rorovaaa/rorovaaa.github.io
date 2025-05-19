@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>NeuroTalkSignToText - Переводчик жестовых языков</title>
+    <title>NeuroTalkSignToText</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@latest/dist/ort.min.js"></script>
@@ -15,150 +16,133 @@
             --safe-area-inset-bottom: env(safe-area-inset-bottom);
         }
 
-        body { 
-            font-family: 'Inter', sans-serif; 
+        body {
+            font-family: 'Inter', sans-serif;
             background-color: #f8fafc;
             padding-top: var(--safe-area-inset-top);
             padding-bottom: var(--safe-area-inset-bottom);
         }
 
-        .gradient-bg { 
-            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); 
+        .gradient-bg {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
         }
 
-        .video-container { 
-            position: relative; 
-            padding-bottom: 56.25%; 
-            height: 0; 
-            overflow: hidden; 
-            border-radius: 12px; 
-            background-color: #000; 
+        .video-container {
+            position: relative;
+            height: 50vh;
+            overflow: hidden;
+            border-radius: 12px;
+            background-color: #000;
         }
 
-        .video-container video, 
-        .video-container canvas { 
-            position: absolute; 
-            top: 0; 
-            left: 0; 
-            width: 100%; 
-            height: 100%; 
-            object-fit: cover; 
+        .video-container video,
+        .video-container canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
         }
 
-        .processing-overlay { 
-            position: absolute; 
-            top: 0; 
-            left: 0; 
-            width: 100%; 
-            height: 100%; 
-            background: rgba(0,0,0,0.7); 
-            display: none; 
-            justify-content: center; 
-            align-items: center; 
-            color: white; 
+        .processing-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            color: white;
         }
 
-        @media (max-width: 768px) {
-            .video-container {
-                height: 50vh;
-                padding-bottom: 0;
-            }
+        .confidence-bar {
+            transition: width 0.3s ease, background-color 0.3s ease;
         }
     </style>
 </head>
-<body>
+<body class="min-h-screen">
     <header class="gradient-bg text-white">
-        <div class="container mx-auto px-4 py-8">
+        <div class="container mx-auto px-4 py-4">
             <div class="flex justify-between items-center">
                 <div class="flex items-center space-x-2">
-                    <i class="fas fa-hands-helping text-3xl"></i>
-                    <h1 class="text-2xl font-bold">NeuroTalkSignToText</h1>
+                    <i class="fas fa-hands-helping text-xl"></i>
+                    <h1 class="text-lg font-bold">NeuroTalkSignToText</h1>
                 </div>
                 <button onclick="Telegram.WebApp.close()" class="text-white">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            <div class="mt-16 mb-12 text-center">
-                <h2 class="text-4xl md:text-5xl font-bold mb-4">Переводчик жестовых языков</h2>
-                <p class="text-xl md:text-2xl max-w-3xl mx-auto">
-                    Реальное распознавание РЖЯ и ASL в реальном времени
-                </p>
-            </div>
         </div>
     </header>
 
-    <main class="container mx-auto px-4 py-12 -mt-10">
+    <main class="container mx-auto px-4 py-4" style="padding-bottom: var(--safe-area-inset-bottom)">
         <div class="bg-white rounded-xl shadow-xl overflow-hidden">
-            <div class="grid md:grid-cols-2 gap-8 p-8">
-                <div>
-                    <div class="mb-6">
-                        <div class="flex justify-between items-center mb-4">
-                            <div class="flex items-center space-x-3">
-                                <select id="language-select" class="bg-gray-100 border border-gray-300 rounded-full py-1 px-4 pr-8 text-sm">
-                                    <option value="RSL">Русский (РЖЯ)</option>
-                                    <option value="ASL">Американский (ASL)</option>
-                                </select>
-                                <button id="switch-camera" class="text-gray-700 hover:text-indigo-600 transition" title="Сменить камеру">
-                                    <i class="fas fa-camera-retro"></i>
-                                </button>
-                            </div>
-                            <div class="flex items-center space-x-2 text-sm">
-                                <span>Порог уверенности:</span>
-                                <input type="range" id="confidence-threshold" min="0" max="100" value="70" class="w-24 accent-indigo-600">
-                                <span id="threshold-value">70%</span>
-                            </div>
+            <div class="grid md:grid-cols-1 gap-4 p-4">
+                <div class="mb-4">
+                    <div class="flex justify-between items-center mb-3">
+                        <div class="flex items-center space-x-2">
+                            <select id="language-select" class="bg-gray-100 border border-gray-300 rounded-full py-1 px-3 text-xs">
+                                <option value="RSL">Русский (РЖЯ)</option>
+                                <option value="ASL">Американский (ASL)</option>
+                            </select>
+                            <button id="switch-camera" class="text-gray-700 hover:text-indigo-600 text-xs">
+                                <i class="fas fa-camera-retro"></i>
+                            </button>
                         </div>
-                        <div class="video-container">
-                            <video id="input-video" autoplay muted playsinline class="hidden"></video>
-                            <canvas id="processing-canvas"></canvas>
-                            <div id="video-placeholder" class="absolute inset-0 flex flex-col items-center justify-center bg-gray-100">
-                                <i class="fas fa-video-slash text-4xl mb-4 text-gray-400"></i>
-                                <button id="start-camera-btn" class="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition">
-                                    Активировать камеру
-                                </button>
-                            </div>
-                            <div id="processing-overlay" class="processing-overlay">
-                                <div class="text-center">
-                                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
-                                    <p class="mt-2">Обработка жеста...</p>
-                                </div>
+                        <div class="flex items-center space-x-2 text-xs">
+                            <span>Порог:</span>
+                            <input type="range" id="confidence-threshold" min="0" max="100" value="70" class="w-20 accent-indigo-600">
+                            <span id="threshold-value" class="text-xs">70%</span>
+                        </div>
+                    </div>
+                    <div class="video-container">
+                        <video id="input-video" autoplay muted playsinline class="hidden"></video>
+                        <canvas id="processing-canvas"></canvas>
+                        <div id="video-placeholder" class="absolute inset-0 flex flex-col items-center justify-center bg-gray-100">
+                            <i class="fas fa-video-slash text-2xl mb-2 text-gray-400"></i>
+                            <button id="start-camera-btn" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition text-sm">
+                                Активировать камеру
+                            </button>
+                        </div>
+                        <div id="processing-overlay" class="processing-overlay">
+                            <div class="text-center">
+                                <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-white mx-auto"></div>
+                                <p class="mt-2 text-sm">Обработка жеста...</p>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div>
-                    <div class="mb-6">
-                        <div class="flex justify-between items-center mb-4">
-                            <label class="font-medium text-gray-700">Результаты распознавания</label>
-                            <div class="flex space-x-3">
-                                <button id="copy-btn" class="text-gray-500 hover:text-indigo-600">
-                                    <i class="fas fa-copy"></i>
-                                </button>
-                                <button id="clear-btn" class="text-gray-500 hover:text-indigo-600">
-                                    <i class="fas fa-trash"></i>
-                                </button>
+                <div class="mb-4">
+                    <div class="flex justify-between items-center mb-3">
+                        <label class="font-medium text-gray-700 text-sm">Результаты:</label>
+                        <div class="flex items-center space-x-2">
+                            <span id="confidence-percent" class="text-indigo-600 font-bold text-sm">0%</span>
+                            <div class="w-24 h-2 bg-gray-200 rounded-full">
+                                <div id="confidence-bar" class="confidence-bar h-2 bg-indigo-600 rounded-full"></div>
                             </div>
                         </div>
-                        <div class="bg-gray-50 p-4 rounded-lg h-96 overflow-y-auto">
-                            <div id="output" class="space-y-2"></div>
-                            <div id="confidence" class="mt-4 hidden">
-                                <div class="flex justify-between mb-1 text-sm">
-                                    <span>Уверенность:</span>
-                                    <span id="confidence-value">0%</span>
-                                </div>
-                                <div class="h-2 bg-gray-200 rounded-full">
-                                    <div id="confidence-bar" class="h-2 bg-indigo-600 rounded-full transition-all" style="width: 0%"></div>
-                                </div>
-                            </div>
+                        <div class="flex space-x-2">
+                            <button id="copy-btn" class="text-gray-500 hover:text-indigo-600 text-sm">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                            <button id="clear-btn" class="text-gray-500 hover:text-indigo-600 text-sm">
+                                <i class="fas fa-trash"></i>
+                            </button>
                         </div>
+                    </div>
+                    <div class="bg-gray-50 p-3 rounded-lg h-48 overflow-y-auto">
+                        <div id="output" class="space-y-1 text-xs"></div>
                     </div>
                 </div>
             </div>
         </div>
     </main>
 
-    <button id="send-btn" class="fixed bottom-6 right-6 bg-indigo-600 text-white p-4 rounded-full shadow-xl">
+    <button id="send-data-btn" class="fixed bottom-4 right-4 bg-indigo-600 text-white p-3 rounded-full shadow-lg">
         <i class="fas fa-paper-plane"></i>
     </button>
 
@@ -200,14 +184,23 @@
                 startBtn: document.getElementById('start-camera-btn'),
                 output: document.getElementById('output'),
                 processing: document.getElementById('processing-overlay'),
-                confidence: document.getElementById('confidence'),
-                confidenceValue: document.getElementById('confidence-value'),
+                confidencePercent: document.getElementById('confidence-percent'),
                 confidenceBar: document.getElementById('confidence-bar'),
                 threshold: document.getElementById('confidence-threshold'),
                 thresholdValue: document.getElementById('threshold-value'),
                 switchCamera: document.getElementById('switch-camera'),
-                languageSelect: document.getElementById('language-select')
+                languageSelect: document.getElementById('language-select'),
+                sendDataBtn: document.getElementById('send-data-btn')
             };
+
+            function updateConfidenceUI(probability) {
+                const percent = Math.round(probability * 100);
+                elements.confidencePercent.textContent = `${percent}%`;
+                elements.confidenceBar.style.width = `${percent}%`;
+                
+                const hue = Math.round(percent * 1.2);
+                elements.confidenceBar.style.backgroundColor = `hsl(${hue}, 75%, 45%)`;
+            }
 
             async function initCameras() {
                 try {
@@ -217,7 +210,7 @@
                         currentCameraId = cameras[0].deviceId;
                     }
                 } catch (error) {
-                    console.error('Ошибка получения списка камер:', error);
+                    console.error('Ошибка получения камер:', error);
                     tg.showAlert('Ошибка доступа к камерам');
                 }
             }
@@ -239,16 +232,14 @@
                 try {
                     elements.processing.style.display = 'flex';
                     currentLabels = await loadLabels(modelType);
-                    if (currentLabels.length === 0) {
-                        throw new Error('Не удалось загрузить метки классов');
-                    }
+                    if (currentLabels.length === 0) throw new Error('Метки не загружены');
 
                     currentModel = await ort.InferenceSession.create(MODEL_CONFIG[modelType].path);
-                    console.log(`${modelType} модель успешно загружена`);
+                    console.log(`${modelType} модель загружена`);
                     return true;
                 } catch (error) {
-                    console.error(`Ошибка загрузки модели ${modelType}:`, error);
-                    tg.showAlert(`Ошибка загрузки модели: ${error.message}`);
+                    console.error(`Ошибка модели ${modelType}:`, error);
+                    tg.showAlert(`Ошибка модели: ${error.message}`);
                     return false;
                 } finally {
                     elements.processing.style.display = 'none';
@@ -274,9 +265,7 @@
                     }
 
                     frameBuffer.push(frameData);
-                    if (frameBuffer.length > config.frameBufferSize) {
-                        frameBuffer.shift();
-                    }
+                    if (frameBuffer.length > config.frameBufferSize) frameBuffer.shift();
 
                     const tensorData = new Float32Array(config.inputShape.reduce((a, b) => a * b, 1));
                     let offset = 0;
@@ -313,25 +302,22 @@
                 const maxProbability = Math.max(...probabilities);
                 const predictedIndex = probabilities.indexOf(maxProbability);
 
+                updateConfidenceUI(maxProbability);
+
                 if (maxProbability >= confidenceThreshold) {
                     const entry = document.createElement('div');
-                    entry.className = 'p-2 bg-white rounded shadow-sm';
+                    entry.className = 'p-1.5 bg-white rounded shadow-xs text-xs';
                     entry.innerHTML = `
-                        <span class="text-gray-500 text-sm">${new Date().toLocaleTimeString()}</span>
-                        <span class="font-medium ml-2">${currentLabels[predictedIndex]}</span>
-                        <span class="text-indigo-500 ml-2">${(maxProbability * 100).toFixed(1)}%</span>
+                        <span class="text-gray-500">${new Date().toLocaleTimeString()}</span>
+                        <span class="font-medium ml-1">${currentLabels[predictedIndex]}</span>
+                        <span class="text-indigo-500 ml-1">${(maxProbability * 100).toFixed(1)}%</span>
                     `;
                     elements.output.prepend(entry);
                 }
-
-                elements.confidenceValue.textContent = `${(maxProbability * 100).toFixed(1)}%`;
-                elements.confidenceBar.style.width = `${(maxProbability * 100).toFixed(1)}%`;
-                elements.confidence.classList.remove('hidden');
             }
 
             async function processFrame() {
                 if (!isProcessing || !currentModel) return;
-
                 try {
                     const inputTensor = preprocessFrame();
                     const results = await currentModel.run({
@@ -339,7 +325,7 @@
                     });
                     handlePredictions(results[Object.keys(results)[0]]);
                 } catch (error) {
-                    console.error('Ошибка обработки кадра:', error);
+                    console.error('Ошибка обработки:', error);
                 }
                 requestAnimationFrame(processFrame);
             }
@@ -369,17 +355,23 @@
                         processFrame();
                     }
                 } catch (error) {
-                    console.error('Ошибка доступа к камере:', error);
+                    console.error('Ошибка камеры:', error);
                     tg.showAlert('Доступ к камере запрещен');
                 }
             }
 
             // Обработчики событий
-            elements.startBtn.addEventListener('click', () => startCamera());
+            elements.startBtn.addEventListener('click', async () => {
+                if (!tg.isVersionAtLeast('6.1')) {
+                    tg.showAlert('Обновите Telegram до последней версии');
+                    return;
+                }
+                await tg.requestWriteAccess();
+                startCamera();
+            });
 
             elements.switchCamera.addEventListener('click', async () => {
                 if (cameras.length < 2) return;
-                
                 const currentIndex = cameras.findIndex(camera => camera.deviceId === currentCameraId);
                 const newIndex = (currentIndex + 1) % cameras.length;
                 currentCameraId = cameras[newIndex].deviceId;
@@ -411,8 +403,7 @@
             });
 
             elements.clearBtn.addEventListener('click', () => {
-                elements.output.innerHTML = '<div class="text-gray-400 text-center py-4">История очищена</div>';
-                elements.confidence.classList.add('hidden');
+                elements.output.innerHTML = '<div class="text-gray-400 text-center py-2 text-xs">История очищена</div>';
             });
 
             elements.copyBtn.addEventListener('click', () => {
@@ -425,22 +416,26 @@
                     .then(() => {
                         const icon = elements.copyBtn.querySelector('i');
                         icon.className = 'fas fa-check text-green-500';
-                        setTimeout(() => {
-                            icon.className = 'fas fa-copy';
-                        }, 2000);
+                        setTimeout(() => icon.className = 'fas fa-copy', 2000);
                     });
             });
 
-            // Обработчик для кнопки отправки
-            document.getElementById('send-btn').addEventListener('click', () => {
+            elements.sendDataBtn.addEventListener('click', () => {
                 const text = Array.from(elements.output.children)
                     .map(el => el.textContent)
                     .reverse()
                     .join('\n');
                 
-                if (text.trim()) {
+                if (text.trim().length > 0) {
                     tg.sendData(text);
                     tg.close();
+                }
+            });
+
+            // Обработчик закрытия приложения
+            Telegram.WebApp.onEvent('web_app_close', () => {
+                if (videoStream) {
+                    videoStream.getTracks().forEach(track => track.stop());
                 }
             });
 

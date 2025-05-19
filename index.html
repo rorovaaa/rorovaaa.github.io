@@ -35,31 +35,21 @@
             background-color: #000;
         }
 
-        .video-container video,
-        .video-container canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
+        .confidence-bar {
+            transition: width 0.3s ease, background-color 0.3s ease;
         }
 
         .processing-overlay {
+            display: none;
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
             background: rgba(0,0,0,0.7);
-            display: none;
             justify-content: center;
             align-items: center;
             color: white;
-        }
-
-        .confidence-bar {
-            transition: width 0.3s ease, background-color 0.3s ease;
         }
     </style>
 </head>
@@ -71,7 +61,7 @@
                     <i class="fas fa-hands-helping text-xl"></i>
                     <h1 class="text-lg font-bold">NeuroTalkSignToText</h1>
                 </div>
-                <button onclick="Telegram.WebApp.close()" class="text-white">
+                <button onclick="handleClose()" class="text-white">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -148,10 +138,14 @@
 
     <script>
         const tg = Telegram.WebApp;
-        tg.expand();
-        tg.enableClosingConfirmation();
+        let videoStream = null;
 
         document.addEventListener('DOMContentLoaded', () => {
+            // Инициализация приложения
+            tg.expand();
+            tg.ready();
+
+            // Конфигурация моделей
             const MODEL_CONFIG = {
                 RSL: {
                     path: 'models/rsl_model.onnx',
@@ -171,13 +165,13 @@
             let currentModel = null;
             let currentLabels = [];
             let isProcessing = false;
-            let videoStream = null;
             let currentModelType = 'RSL';
             let confidenceThreshold = 0.7;
             let frameBuffer = [];
             let cameras = [];
             let currentCameraId = '';
 
+            // Элементы интерфейса
             const elements = {
                 video: document.getElementById('input-video'),
                 canvas: document.getElementById('processing-canvas'),
@@ -188,65 +182,71 @@
                 confidenceBar: document.getElementById('confidence-bar'),
                 threshold: document.getElementById('confidence-threshold'),
                 thresholdValue: document.getElementById('threshold-value'),
-                switchCamera: document.getElementById('switch-camera'),
                 languageSelect: document.getElementById('language-select'),
                 sendDataBtn: document.getElementById('send-data-btn')
             };
 
-            function updateConfidenceUI(probability) {
+            // Безопасное отображение уведомлений
+            const safeAlert = (message) => {
+                tg.showAlert ? tg.showAlert(message) : alert(message);
+            };
+
+            // Обновление интерфейса уверенности
+            const updateConfidenceUI = (probability) => {
                 const percent = Math.round(probability * 100);
                 elements.confidencePercent.textContent = `${percent}%`;
                 elements.confidenceBar.style.width = `${percent}%`;
-                
                 const hue = Math.round(percent * 1.2);
                 elements.confidenceBar.style.backgroundColor = `hsl(${hue}, 75%, 45%)`;
-            }
+            };
 
-            async function initCameras() {
+            // Инициализация камер
+            const initCameras = async () => {
                 try {
                     const devices = await navigator.mediaDevices.enumerateDevices();
                     cameras = devices.filter(device => device.kind === 'videoinput');
-                    if (cameras.length > 0) {
-                        currentCameraId = cameras[0].deviceId;
-                    }
+                    currentCameraId = cameras[0]?.deviceId || '';
                 } catch (error) {
-                    console.error('Ошибка получения камер:', error);
-                    tg.showAlert('Ошибка доступа к камерам');
+                    safeAlert('Ошибка доступа к камерам');
                 }
-            }
+            };
 
-            async function loadLabels(modelType) {
+            // Загрузка меток
+            const loadLabels = async (modelType) => {
                 try {
                     const response = await fetch(MODEL_CONFIG[modelType].labels);
                     const text = await response.text();
-                    return modelType === 'RSL'
+                    return modelType === 'RSL' 
                         ? text.split('\n').map(line => line.split('\t')[1]?.trim() || 'Unknown')
                         : text.split('\n').map(line => line.split(' ')[1]?.trim() || 'Unknown');
                 } catch (error) {
-                    console.error('Ошибка загрузки меток:', error);
+                    safeAlert('Ошибка загрузки меток');
                     return [];
                 }
-            }
+            };
 
-            async function initializeModel(modelType) {
+            // Инициализация модели
+            const initializeModel = async (modelType) => {
                 try {
                     elements.processing.style.display = 'flex';
                     currentLabels = await loadLabels(modelType);
-                    if (currentLabels.length === 0) throw new Error('Метки не загружены');
+                    
+                    if (currentLabels.length === 0) {
+                        throw new Error('Метки не загружены');
+                    }
 
                     currentModel = await ort.InferenceSession.create(MODEL_CONFIG[modelType].path);
-                    console.log(`${modelType} модель загружена`);
                     return true;
                 } catch (error) {
-                    console.error(`Ошибка модели ${modelType}:`, error);
-                    tg.showAlert(`Ошибка модели: ${error.message}`);
+                    safeAlert(`Ошибка загрузки модели: ${error.message}`);
                     return false;
                 } finally {
                     elements.processing.style.display = 'none';
                 }
-            }
+            };
 
-            function preprocessFrame() {
+            // Обработка кадров
+            const preprocessFrame = () => {
                 const config = MODEL_CONFIG[currentModelType];
                 const ctx = elements.canvas.getContext('2d');
 
@@ -254,23 +254,23 @@
                     elements.canvas.width = 224;
                     elements.canvas.height = 224;
                     ctx.drawImage(elements.video, 0, 0, 224, 224);
-
+                    
                     const imageData = ctx.getImageData(0, 0, 224, 224);
                     const frameData = new Float32Array(3 * 224 * 224);
 
                     for (let i = 0; i < imageData.data.length; i += 4) {
-                        frameData[i / 4] = imageData.data[i] / 255;
-                        frameData[i / 4 + 224 * 224] = imageData.data[i + 1] / 255;
-                        frameData[i / 4 + 2 * 224 * 224] = imageData.data[i + 2] / 255;
+                        frameData[i/4] = imageData.data[i] / 255;
+                        frameData[i/4 + 224*224] = imageData.data[i+1] / 255;
+                        frameData[i/4 + 2*224*224] = imageData.data[i+2] / 255;
                     }
 
                     frameBuffer.push(frameData);
                     if (frameBuffer.length > config.frameBufferSize) frameBuffer.shift();
 
-                    const tensorData = new Float32Array(config.inputShape.reduce((a, b) => a * b, 1));
+                    const tensorData = new Float32Array(config.inputShape.reduce((a,b) => a*b, 1));
                     let offset = 0;
                     for (let i = 0; i < config.frameBufferSize; i++) {
-                        const frame = frameBuffer[i] || new Float32Array(3 * 224 * 224).fill(0);
+                        const frame = frameBuffer[i] || new Float32Array(3*224*224).fill(0);
                         tensorData.set(frame, offset);
                         offset += frame.length;
                     }
@@ -280,24 +280,25 @@
                     elements.canvas.width = 28;
                     elements.canvas.height = 28;
                     ctx.drawImage(elements.video, 0, 0, 28, 28);
-
+                    
                     const imageData = ctx.getImageData(0, 0, 28, 28);
-                    const data = new Float32Array(1 * 1 * 28 * 28);
+                    const data = new Float32Array(1*1*28*28);
 
                     for (let i = 0; i < imageData.data.length; i += 4) {
-                        const grayValue = (imageData.data[i] + imageData.data[i + 1] + imageData.data[i + 2]) / 3;
-                        data[i / 4] = grayValue / 255;
+                        const grayValue = (imageData.data[i] + imageData.data[i+1] + imageData.data[i+2]) / 3;
+                        data[i/4] = grayValue / 255;
                     }
 
                     return new ort.Tensor('float32', data, config.inputShape);
                 }
-            }
+            };
 
-            function handlePredictions(predictions) {
+            // Обработка предсказаний
+            const handlePredictions = (predictions) => {
                 const scores = Array.from(predictions.data);
                 const softmax = scores.map(x => Math.exp(x));
-                const sum = softmax.reduce((a, b) => a + b, 0);
-                const probabilities = softmax.map(x => x / sum);
+                const sum = softmax.reduce((a,b) => a+b, 0);
+                const probabilities = softmax.map(x => x/sum);
 
                 const maxProbability = Math.max(...probabilities);
                 const predictedIndex = probabilities.indexOf(maxProbability);
@@ -310,14 +311,16 @@
                     entry.innerHTML = `
                         <span class="text-gray-500">${new Date().toLocaleTimeString()}</span>
                         <span class="font-medium ml-1">${currentLabels[predictedIndex]}</span>
-                        <span class="text-indigo-500 ml-1">${(maxProbability * 100).toFixed(1)}%</span>
+                        <span class="text-indigo-500 ml-1">${(maxProbability*100).toFixed(1)}%</span>
                     `;
                     elements.output.prepend(entry);
                 }
-            }
+            };
 
-            async function processFrame() {
+            // Основной цикл обработки
+            const processFrame = async () => {
                 if (!isProcessing || !currentModel) return;
+                
                 try {
                     const inputTensor = preprocessFrame();
                     const results = await currentModel.run({
@@ -328,22 +331,23 @@
                     console.error('Ошибка обработки:', error);
                 }
                 requestAnimationFrame(processFrame);
-            }
+            };
 
-            async function startCamera(deviceId = '') {
+            // Запуск камеры
+            const startCamera = async (deviceId = '') => {
                 try {
+                    if (tg.platform !== 'unknown') {
+                        await tg.requestWriteAccess();
+                    }
+
                     const constraints = {
                         video: {
-                            deviceId: deviceId ? { exact: deviceId } : undefined,
+                            deviceId: deviceId || undefined,
                             width: { ideal: currentModelType === 'RSL' ? 224 : 28 },
                             height: { ideal: currentModelType === 'RSL' ? 224 : 28 },
                             facingMode: 'user'
                         }
                     };
-
-                    if (tg.platform !== 'unknown') {
-                        await tg.requestWriteAccess();
-                    }
 
                     videoStream = await navigator.mediaDevices.getUserMedia(constraints);
                     elements.video.srcObject = videoStream;
@@ -355,32 +359,28 @@
                         processFrame();
                     }
                 } catch (error) {
-                    console.error('Ошибка камеры:', error);
-                    tg.showAlert('Доступ к камере запрещен');
+                    safeAlert('Доступ к камере запрещен');
                 }
-            }
+            };
 
             // Обработчики событий
             elements.startBtn.addEventListener('click', async () => {
                 if (!tg.isVersionAtLeast('6.1')) {
-                    tg.showAlert('Обновите Telegram до последней версии');
+                    safeAlert('Обновите Telegram до последней версии');
                     return;
                 }
-                await tg.requestWriteAccess();
-                startCamera();
+                await startCamera();
             });
 
             elements.switchCamera.addEventListener('click', async () => {
                 if (cameras.length < 2) return;
-                const currentIndex = cameras.findIndex(camera => camera.deviceId === currentCameraId);
-                const newIndex = (currentIndex + 1) % cameras.length;
-                currentCameraId = cameras[newIndex].deviceId;
-
+                const currentIndex = cameras.findIndex(c => c.deviceId === currentCameraId);
+                currentCameraId = cameras[(currentIndex + 1) % cameras.length].deviceId;
+                
                 if (videoStream) {
-                    videoStream.getTracks().forEach(track => track.stop());
+                    videoStream.getTracks().forEach(t => t.stop());
                     elements.video.srcObject = null;
                 }
-
                 await startCamera(currentCameraId);
             });
 
@@ -388,18 +388,17 @@
                 isProcessing = false;
                 currentModelType = this.value;
                 frameBuffer = [];
-
+                
                 if (videoStream) {
-                    videoStream.getTracks().forEach(track => track.stop());
+                    videoStream.getTracks().forEach(t => t.stop());
                     elements.video.srcObject = null;
                 }
-
                 await startCamera(currentCameraId);
             });
 
-            elements.threshold.addEventListener('input', (event) => {
-                confidenceThreshold = event.target.value / 100;
-                elements.thresholdValue.textContent = `${event.target.value}%`;
+            elements.threshold.addEventListener('input', (e) => {
+                confidenceThreshold = e.target.value / 100;
+                elements.thresholdValue.textContent = `${e.target.value}%`;
             });
 
             elements.clearBtn.addEventListener('click', () => {
@@ -408,16 +407,15 @@
 
             elements.copyBtn.addEventListener('click', () => {
                 const text = Array.from(elements.output.children)
-                    .map(element => element.textContent)
+                    .map(el => el.textContent)
                     .reverse()
                     .join('\n');
                 
-                navigator.clipboard.writeText(text)
-                    .then(() => {
-                        const icon = elements.copyBtn.querySelector('i');
-                        icon.className = 'fas fa-check text-green-500';
-                        setTimeout(() => icon.className = 'fas fa-copy', 2000);
-                    });
+                navigator.clipboard.writeText(text).then(() => {
+                    const icon = elements.copyBtn.querySelector('i');
+                    icon.className = 'fas fa-check text-green-500';
+                    setTimeout(() => icon.className = 'fas fa-copy', 2000);
+                });
             });
 
             elements.sendDataBtn.addEventListener('click', () => {
@@ -426,22 +424,23 @@
                     .reverse()
                     .join('\n');
                 
-                if (text.trim().length > 0) {
+                if (text.trim()) {
                     tg.sendData(text);
                     tg.close();
                 }
             });
 
-            // Обработчик закрытия приложения
-            Telegram.WebApp.onEvent('web_app_close', () => {
-                if (videoStream) {
-                    videoStream.getTracks().forEach(track => track.stop());
-                }
-            });
-
+            // Инициализация
             initCameras();
-            tg.ready();
         });
+
+        // Обработчик закрытия приложения
+        function handleClose() {
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+            }
+            tg.close();
+        }
     </script>
 </body>
 </html>

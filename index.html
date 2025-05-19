@@ -2,384 +2,372 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>NeuroTalkSignToText</title>
-    <link rel="icon" type="image/x-icon" href="/favicon.ico">
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NeuroTalkSignToText - Переводчик жестовых языков</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@latest/dist/ort.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        :root {
-            --safe-area-inset-top: env(safe-area-inset-top);
-            --safe-area-inset-bottom: env(safe-area-inset-bottom);
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f8fafc; 
         }
-
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f8fafc;
-            padding-top: var(--safe-area-inset-top);
-            padding-bottom: var(--safe-area-inset-bottom);
+        .gradient-bg { 
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); 
         }
-
-        .gradient-bg {
-            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        .video-container { 
+            position: relative; 
+            padding-bottom: 56.25%; 
+            height: 0; 
+            overflow: hidden; 
+            border-radius: 12px; 
+            background-color: #000; 
         }
-
-        .video-container {
-            position: relative;
-            height: 50vh;
-            overflow: hidden;
-            border-radius: 12px;
-            background-color: #000;
+        .video-container video, 
+        .video-container canvas { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            object-fit: cover; 
         }
-
-        .confidence-bar {
-            transition: width 0.3s ease, background-color 0.3s ease;
-        }
-
-        .processing-overlay {
-            display: none;
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.7);
-            justify-content: center;
-            align-items: center;
-            color: white;
+        .processing-overlay { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            background: rgba(0,0,0,0.7); 
+            display: none; 
+            justify-content: center; 
+            align-items: center; 
+            color: white; 
         }
     </style>
 </head>
-<body class="min-h-screen">
+<body>
     <header class="gradient-bg text-white">
-        <div class="container mx-auto px-4 py-4">
+        <div class="container mx-auto px-4 py-8">
             <div class="flex justify-between items-center">
                 <div class="flex items-center space-x-2">
-                    <i class="fas fa-hands-helping text-xl"></i>
-                    <h1 class="text-lg font-bold">NeuroTalkSignToText</h1>
+                    <i class="fas fa-hands-helping text-3xl"></i>
+                    <h1 class="text-2xl font-bold">NeuroTalkSignToText</h1>
                 </div>
-                <button onclick="handleClose()" class="text-white">
-                    <i class="fas fa-times"></i>
-                </button>
+            </div>
+            <div class="mt-16 mb-12 text-center">
+                <h2 class="text-4xl md:text-5xl font-bold mb-4">Переводчик жестовых языков</h2>
+                <p class="text-xl md:text-2xl max-w-3xl mx-auto">
+                    Реальное распознавание РЖЯ и ASL в реальном времени
+                </p>
             </div>
         </div>
     </header>
 
-    <main class="container mx-auto px-4 py-4" style="padding-bottom: var(--safe-area-inset-bottom)">
+    <main class="container mx-auto px-4 py-12 -mt-10">
         <div class="bg-white rounded-xl shadow-xl overflow-hidden">
-            <div class="grid md:grid-cols-1 gap-4 p-4">
-                <div class="mb-4">
-                    <div class="flex justify-between items-center mb-3">
-                        <div class="flex items-center space-x-2">
-                            <select id="language-select" class="bg-gray-100 border border-gray-300 rounded-full py-1 px-3 text-xs">
-                                <option value="RSL">Русский (РЖЯ)</option>
-                                <option value="ASL">Американский (ASL)</option>
-                            </select>
-                            <button id="switch-camera" class="text-gray-700 hover:text-indigo-600 text-xs">
-                                <i class="fas fa-camera-retro"></i>
-                            </button>
+            <div class="grid md:grid-cols-2 gap-8 p-8">
+                <!-- Блок с видео -->
+                <div>
+                    <div class="mb-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <div class="flex items-center space-x-3">
+                                <select id="language-select" class="bg-gray-100 border border-gray-300 rounded-full py-1 px-4 pr-8 text-sm">
+                                    <option value="RSL">Русский (РЖЯ)</option>
+                                    <option value="ASL">Американский (ASL)</option>
+                                </select>
+                                <button id="switch-camera" class="text-gray-700 hover:text-indigo-600 transition" title="Сменить камеру">
+                                    <i class="fas fa-camera-retro"></i>
+                                </button>
+                            </div>
+                            <div class="flex items-center space-x-2 text-sm">
+                                <span>Порог уверенности:</span>
+                                <input type="range" id="confidence-threshold" min="0" max="100" value="70" class="w-24 accent-indigo-600">
+                                <span id="threshold-value">70%</span>
+                            </div>
                         </div>
-                        <div class="flex items-center space-x-2 text-xs">
-                            <span>Порог:</span>
-                            <input type="range" id="confidence-threshold" min="0" max="100" value="70" class="w-20 accent-indigo-600">
-                            <span id="threshold-value" class="text-xs">70%</span>
-                        </div>
-                    </div>
-                    <div class="video-container">
-                        <video id="input-video" autoplay muted playsinline class="hidden"></video>
-                        <canvas id="processing-canvas"></canvas>
-                        <div id="video-placeholder" class="absolute inset-0 flex flex-col items-center justify-center bg-gray-100">
-                            <i class="fas fa-video-slash text-2xl mb-2 text-gray-400"></i>
-                            <button id="start-camera-btn" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition text-sm">
-                                Активировать камеру
-                            </button>
-                        </div>
-                        <div id="processing-overlay" class="processing-overlay">
-                            <div class="text-center">
-                                <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-white mx-auto"></div>
-                                <p class="mt-2 text-sm">Обработка жеста...</p>
+                        <div class="video-container">
+                            <video id="input-video" autoplay muted playsinline class="hidden"></video>
+                            <canvas id="processing-canvas"></canvas>
+                            <div id="video-placeholder" class="absolute inset-0 flex flex-col items-center justify-center bg-gray-100">
+                                <i class="fas fa-video-slash text-4xl mb-4 text-gray-400"></i>
+                                <button id="start-camera-btn" class="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition">
+                                    Активировать камеру
+                                </button>
+                            </div>
+                            <div id="processing-overlay" class="processing-overlay">
+                                <div class="text-center">
+                                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
+                                    <p class="mt-2">Обработка жеста...</p>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="mb-4">
-                    <div class="flex justify-between items-center mb-3">
-                        <label class="font-medium text-gray-700 text-sm">Результаты:</label>
-                        <div class="flex items-center space-x-2">
-                            <span id="confidence-percent" class="text-indigo-600 font-bold text-sm">0%</span>
-                            <div class="w-24 h-2 bg-gray-200 rounded-full">
-                                <div id="confidence-bar" class="confidence-bar h-2 bg-indigo-600 rounded-full"></div>
+                <!-- Блок с результатами -->
+                <div>
+                    <div class="mb-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <label class="font-medium text-gray-700">Результаты распознавания</label>
+                            <div class="flex space-x-3">
+                                <button id="copy-btn" class="text-gray-500 hover:text-indigo-600">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                                <button id="clear-btn" class="text-gray-500 hover:text-indigo-600">
+                                    <i class="fas fa-trash"></i>
+                                </button>
                             </div>
                         </div>
-                        <div class="flex space-x-2">
-                            <button id="copy-btn" class="text-gray-500 hover:text-indigo-600 text-sm">
-                                <i class="fas fa-copy"></i>
-                            </button>
-                            <button id="clear-btn" class="text-gray-500 hover:text-indigo-600 text-sm">
-                                <i class="fas fa-trash"></i>
-                            </button>
+                        <div class="bg-gray-50 p-4 rounded-lg h-96 overflow-y-auto">
+                            <div id="output" class="space-y-2"></div>
+                            <div id="confidence" class="mt-4 hidden">
+                                <div class="flex justify-between mb-1 text-sm">
+                                    <span>Уверенность:</span>
+                                    <span id="confidence-value">0%</span>
+                                </div>
+                                <div class="h-2 bg-gray-200 rounded-full">
+                                    <div id="confidence-bar" class="h-2 bg-indigo-600 rounded-full transition-all" style="width: 0%"></div>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                    <div class="bg-gray-50 p-3 rounded-lg h-48 overflow-y-auto">
-                        <div id="output" class="space-y-1 text-xs"></div>
                     </div>
                 </div>
             </div>
         </div>
     </main>
 
-    <button id="send-data-btn" class="fixed bottom-4 right-4 bg-indigo-600 text-white p-3 rounded-full shadow-lg">
-        <i class="fas fa-paper-plane"></i>
-    </button>
-
     <script>
-        const tg = Telegram.WebApp;
-        let videoStream = null;
-        let currentModel = null;
-        let currentLabels = [];
-        let isProcessing = false;
-        let currentModelType = 'RSL';
-        let confidenceThreshold = 0.7;
-        let frameBuffer = [];
-        let cameras = [];
-        let currentCameraId = '';
-
-        const MODEL_CONFIG = {
-            RSL: {
-                path: 'models/rsl_model.onnx',
-                labels: 'labels/RSL_class_list.txt',
-                inputName: 'actual_input_1',
-                inputShape: [1, 3, 32, 224, 224],
-                frameBufferSize: 32
-            },
-            ASL: {
-                path: 'models/asl_model.onnx',
-                labels: 'labels/h5_classes.txt',
-                inputName: 'input',
-                inputShape: [1, 1, 28, 28]
-            }
-        };
-
-        const elements = {
-            video: document.getElementById('input-video'),
-            canvas: document.getElementById('processing-canvas'),
-            startBtn: document.getElementById('start-camera-btn'),
-            output: document.getElementById('output'),
-            processing: document.getElementById('processing-overlay'),
-            confidencePercent: document.getElementById('confidence-percent'),
-            confidenceBar: document.getElementById('confidence-bar'),
-            threshold: document.getElementById('confidence-threshold'),
-            thresholdValue: document.getElementById('threshold-value'),
-            languageSelect: document.getElementById('language-select'),
-            sendDataBtn: document.getElementById('send-data-btn')
-        };
-
-        // Безопасное отображение уведомлений
-        const safeAlert = (message) => {
-            if (tg.showConfirm) {
-                tg.showConfirm(message);
-            } else if (tg.showAlert) {
-                tg.showAlert(message);
-            } else {
-                alert(message);
-            }
-        };
-
-        // Обновление интерфейса уверенности
-        const updateConfidenceUI = (probability) => {
-            const percent = Math.round(probability * 100);
-            elements.confidencePercent.textContent = `${percent}%`;
-            elements.confidenceBar.style.width = `${percent}%`;
-            const hue = Math.round(percent * 1.2);
-            elements.confidenceBar.style.backgroundColor = `hsl(${hue}, 75%, 45%)`;
-        };
-
-        // Инициализация камер
-        const initCameras = async () => {
-            try {
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                cameras = devices.filter(device => device.kind === 'videoinput');
-                currentCameraId = cameras[0]?.deviceId || '';
-            } catch (error) {
-                safeAlert('Ошибка доступа к камерам');
-            }
-        };
-
-        // Загрузка меток
-        const loadLabels = async (modelType) => {
-            try {
-                const response = await fetch(MODEL_CONFIG[modelType].labels);
-                const text = await response.text();
-                return modelType === 'RSL' 
-                    ? text.split('\n').map(line => line.split('\t')[1]?.trim() || 'Unknown')
-                    : text.split('\n').map(line => line.split(' ')[1]?.trim() || 'Unknown');
-            } catch (error) {
-                safeAlert('Ошибка загрузки меток');
-                return [];
-            }
-        };
-
-        // Инициализация модели
-        const initializeModel = async (modelType) => {
-            try {
-                elements.processing.style.display = 'flex';
-                currentLabels = await loadLabels(modelType);
-                
-                if (currentLabels.length === 0) {
-                    throw new Error('Метки не загружены');
+        document.addEventListener('DOMContentLoaded', () => {
+            // Конфигурация моделей
+            const MODEL_CONFIG = {
+                RSL: {
+                    path: 'models/rsl_model.onnx',
+                    labels: 'labels/RSL_class_list.txt',
+                    inputName: 'actual_input_1',
+                    inputShape: [1, 3, 32, 224, 224],
+                    frameBufferSize: 32
+                },
+                ASL: {
+                    path: 'models/asl_model.onnx',
+                    labels: 'labels/h5_classes.txt',
+                    inputName: 'input',
+                    inputShape: [1, 1, 28, 28]
                 }
+            };
 
-                currentModel = await ort.InferenceSession.create(MODEL_CONFIG[modelType].path);
-                return true;
-            } catch (error) {
-                safeAlert(`Ошибка загрузки модели: ${error.message}`);
-                return false;
-            } finally {
-                elements.processing.style.display = 'none';
-            }
-        };
+            // Состояние приложения
+            let currentModel = null;
+            let currentLabels = [];
+            let isProcessing = false;
+            let videoStream = null;
+            let currentModelType = 'RSL';
+            let confidenceThreshold = 0.7;
+            let frameBuffer = [];
+            let cameras = [];
+            let currentCameraId = '';
 
-        // Обработка кадров
-        const preprocessFrame = () => {
-            const config = MODEL_CONFIG[currentModelType];
-            const ctx = elements.canvas.getContext('2d');
+            // Элементы DOM
+            const elements = {
+                video: document.getElementById('input-video'),
+                canvas: document.getElementById('processing-canvas'),
+                startBtn: document.getElementById('start-camera-btn'),
+                output: document.getElementById('output'),
+                processing: document.getElementById('processing-overlay'),
+                confidence: document.getElementById('confidence'),
+                confidenceValue: document.getElementById('confidence-value'),
+                confidenceBar: document.getElementById('confidence-bar'),
+                threshold: document.getElementById('confidence-threshold'),
+                thresholdValue: document.getElementById('threshold-value'),
+                switchCamera: document.getElementById('switch-camera'),
+                languageSelect: document.getElementById('language-select')
+            };
 
-            if (currentModelType === 'RSL') {
-                elements.canvas.width = 224;
-                elements.canvas.height = 224;
-                ctx.drawImage(elements.video, 0, 0, 224, 224);
-                
-                const imageData = ctx.getImageData(0, 0, 224, 224);
-                const frameData = new Float32Array(3 * 224 * 224);
-
-                for (let i = 0; i < imageData.data.length; i += 4) {
-                    frameData[i/4] = imageData.data[i] / 255;
-                    frameData[i/4 + 224*224] = imageData.data[i+1] / 255;
-                    frameData[i/4 + 2*224*224] = imageData.data[i+2] / 255;
-                }
-
-                frameBuffer.push(frameData);
-                if (frameBuffer.length > config.frameBufferSize) frameBuffer.shift();
-
-                const tensorData = new Float32Array(config.inputShape.reduce((a,b) => a*b, 1));
-                let offset = 0;
-                for (let i = 0; i < config.frameBufferSize; i++) {
-                    const frame = frameBuffer[i] || new Float32Array(3*224*224).fill(0);
-                    tensorData.set(frame, offset);
-                    offset += frame.length;
-                }
-
-                return new ort.Tensor('float32', tensorData, config.inputShape);
-            } else {
-                elements.canvas.width = 28;
-                elements.canvas.height = 28;
-                ctx.drawImage(elements.video, 0, 0, 28, 28);
-                
-                const imageData = ctx.getImageData(0, 0, 28, 28);
-                const data = new Float32Array(1*1*28*28);
-
-                for (let i = 0; i < imageData.data.length; i += 4) {
-                    const grayValue = (imageData.data[i] + imageData.data[i+1] + imageData.data[i+2]) / 3;
-                    data[i/4] = grayValue / 255;
-                }
-
-                return new ort.Tensor('float32', data, config.inputShape);
-            }
-        };
-
-        // Обработка предсказаний
-        const handlePredictions = (predictions) => {
-            const scores = Array.from(predictions.data);
-            const softmax = scores.map(x => Math.exp(x));
-            const sum = softmax.reduce((a,b) => a+b, 0);
-            const probabilities = softmax.map(x => x/sum);
-
-            const maxProbability = Math.max(...probabilities);
-            const predictedIndex = probabilities.indexOf(maxProbability);
-
-            updateConfidenceUI(maxProbability);
-
-            if (maxProbability >= confidenceThreshold) {
-                const entry = document.createElement('div');
-                entry.className = 'p-1.5 bg-white rounded shadow-xs text-xs';
-                entry.innerHTML = `
-                    <span class="text-gray-500">${new Date().toLocaleTimeString()}</span>
-                    <span class="font-medium ml-1">${currentLabels[predictedIndex]}</span>
-                    <span class="text-indigo-500 ml-1">${(maxProbability*100).toFixed(1)}%</span>
-                `;
-                elements.output.prepend(entry);
-            }
-        };
-
-        // Основной цикл обработки
-        const processFrame = async () => {
-            if (!isProcessing || !currentModel) return;
-            
-            try {
-                const inputTensor = preprocessFrame();
-                const results = await currentModel.run({
-                    [MODEL_CONFIG[currentModelType].inputName]: inputTensor
-                });
-                handlePredictions(results[Object.keys(results)[0]]);
-            } catch (error) {
-                console.error('Ошибка обработки:', error);
-            }
-            requestAnimationFrame(processFrame);
-        };
-
-        // Запуск камеры
-        const startCamera = async (deviceId = '') => {
-            try {
-                if (tg.platform !== 'unknown') {
-                    await tg.requestWriteAccess();
-                }
-
-                const constraints = {
-                    video: {
-                        deviceId: deviceId || undefined,
-                        width: { ideal: currentModelType === 'RSL' ? 224 : 28 },
-                        height: { ideal: currentModelType === 'RSL' ? 224 : 28 },
-                        facingMode: 'user'
+            // Инициализация списка камер
+            async function initCameras() {
+                try {
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    cameras = devices.filter(device => device.kind === 'videoinput');
+                    if (cameras.length > 0) {
+                        currentCameraId = cameras[0].deviceId;
                     }
-                };
-
-                videoStream = await navigator.mediaDevices.getUserMedia(constraints);
-                elements.video.srcObject = videoStream;
-                elements.video.classList.remove('hidden');
-                document.getElementById('video-placeholder').classList.add('hidden');
-
-                if (await initializeModel(currentModelType)) {
-                    isProcessing = true;
-                    processFrame();
+                } catch (error) {
+                    console.error('Ошибка получения списка камер:', error);
                 }
-            } catch (error) {
-                safeAlert('Доступ к камере запрещен');
             }
-        };
 
-        // Обработчики событий
-        const setupEventListeners = () => {
-            elements.startBtn.addEventListener('click', async () => {
-                if (!tg.isVersionAtLeast('6.1')) {
-                    safeAlert('Обновите Telegram до последней версии');
-                    return;
+            // Загрузка меток классов
+            async function loadLabels(modelType) {
+                try {
+                    const response = await fetch(MODEL_CONFIG[modelType].labels);
+                    const text = await response.text();
+                    return modelType === 'RSL'
+                        ? text.split('\n').map(line => line.split('\t')[1]?.trim() || 'Unknown')
+                        : text.split('\n').map(line => line.split(' ')[1]?.trim() || 'Unknown');
+                } catch (error) {
+                    console.error('Ошибка загрузки меток:', error);
+                    return [];
                 }
-                await startCamera();
-            });
+            }
+
+            // Инициализация модели
+            async function initializeModel(modelType) {
+                try {
+                    elements.processing.style.display = 'flex';
+                    currentLabels = await loadLabels(modelType);
+                    if (currentLabels.length === 0) {
+                        throw new Error('Не удалось загрузить метки классов');
+                    }
+
+                    currentModel = await ort.InferenceSession.create(MODEL_CONFIG[modelType].path);
+                    console.log(`${modelType} модель успешно загружена`);
+                    return true;
+                } catch (error) {
+                    console.error(`Ошибка загрузки модели ${modelType}:`, error);
+                    alert(`Ошибка загрузки модели: ${error.message}`);
+                    return false;
+                } finally {
+                    elements.processing.style.display = 'none';
+                }
+            }
+
+            // Предобработка кадра
+            function preprocessFrame() {
+                const config = MODEL_CONFIG[currentModelType];
+                const ctx = elements.canvas.getContext('2d');
+
+                if (currentModelType === 'RSL') {
+                    // Обработка для модели RSL
+                    elements.canvas.width = 224;
+                    elements.canvas.height = 224;
+                    ctx.drawImage(elements.video, 0, 0, 224, 224);
+
+                    const imageData = ctx.getImageData(0, 0, 224, 224);
+                    const frameData = new Float32Array(3 * 224 * 224);
+
+                    for (let i = 0; i < imageData.data.length; i += 4) {
+                        frameData[i / 4] = imageData.data[i] / 255;         // R
+                        frameData[i / 4 + 224 * 224] = imageData.data[i + 1] / 255;  // G
+                        frameData[i / 4 + 2 * 224 * 224] = imageData.data[i + 2] / 255; // B
+                    }
+
+                    frameBuffer.push(frameData);
+                    if (frameBuffer.length > config.frameBufferSize) {
+                        frameBuffer.shift();
+                    }
+
+                    const tensorData = new Float32Array(config.inputShape.reduce((a, b) => a * b, 1));
+                    let offset = 0;
+                    for (let i = 0; i < config.frameBufferSize; i++) {
+                        const frame = frameBuffer[i] || new Float32Array(3 * 224 * 224).fill(0);
+                        tensorData.set(frame, offset);
+                        offset += frame.length;
+                    }
+
+                    return new ort.Tensor('float32', tensorData, config.inputShape);
+                } else {
+                    // Обработка для модели ASL
+                    elements.canvas.width = 28;
+                    elements.canvas.height = 28;
+                    ctx.drawImage(elements.video, 0, 0, 28, 28);
+
+                    const imageData = ctx.getImageData(0, 0, 28, 28);
+                    const data = new Float32Array(1 * 1 * 28 * 28);
+
+                    for (let i = 0; i < imageData.data.length; i += 4) {
+                        const grayValue = (imageData.data[i] + imageData.data[i + 1] + imageData.data[i + 2]) / 3;
+                        data[i / 4] = grayValue / 255;
+                    }
+
+                    return new ort.Tensor('float32', data, config.inputShape);
+                }
+            }
+
+            // Обработка результатов предсказания
+            function handlePredictions(predictions) {
+                const scores = Array.from(predictions.data);
+                const softmax = scores.map(x => Math.exp(x));
+                const sum = softmax.reduce((a, b) => a + b, 0);
+                const probabilities = softmax.map(x => x / sum);
+
+                const maxProbability = Math.max(...probabilities);
+                const predictedIndex = probabilities.indexOf(maxProbability);
+
+                if (maxProbability >= confidenceThreshold) {
+                    const entry = document.createElement('div');
+                    entry.className = 'p-2 bg-white rounded shadow-sm';
+                    entry.innerHTML = `
+                        <span class="text-gray-500 text-sm">${new Date().toLocaleTimeString()}</span>
+                        <span class="font-medium ml-2">${currentLabels[predictedIndex]}</span>
+                        <span class="text-indigo-500 ml-2">${(maxProbability * 100).toFixed(1)}%</span>
+                    `;
+                    elements.output.prepend(entry);
+                }
+
+                elements.confidenceValue.textContent = `${(maxProbability * 100).toFixed(1)}%`;
+                elements.confidenceBar.style.width = `${(maxProbability * 100).toFixed(1)}%`;
+                elements.confidence.classList.remove('hidden');
+            }
+
+            // Основной цикл обработки
+            async function processFrame() {
+                if (!isProcessing || !currentModel) return;
+
+                try {
+                    const inputTensor = preprocessFrame();
+                    const results = await currentModel.run({
+                        [MODEL_CONFIG[currentModelType].inputName]: inputTensor
+                    });
+                    handlePredictions(results[Object.keys(results)[0]]);
+                } catch (error) {
+                    console.error('Ошибка обработки кадра:', error);
+                }
+                requestAnimationFrame(processFrame);
+            }
+
+            // Запуск камеры
+            async function startCamera(deviceId = '') {
+                try {
+                    const constraints = {
+                        video: {
+                            deviceId: deviceId ? { exact: deviceId } : undefined,
+                            width: { ideal: currentModelType === 'RSL' ? 224 : 28 },
+                            height: { ideal: currentModelType === 'RSL' ? 224 : 28 },
+                            facingMode: 'user'
+                        }
+                    };
+
+                    videoStream = await navigator.mediaDevices.getUserMedia(constraints);
+                    elements.video.srcObject = videoStream;
+                    elements.video.classList.remove('hidden');
+                    document.getElementById('video-placeholder').classList.add('hidden');
+
+                    if (await initializeModel(currentModelType)) {
+                        isProcessing = true;
+                        processFrame();
+                    }
+                } catch (error) {
+                    console.error('Ошибка доступа к камере:', error);
+                    alert('Не удалось получить доступ к камере');
+                }
+            }
+
+            // Обработчики событий
+            elements.startBtn.addEventListener('click', () => startCamera());
 
             elements.switchCamera.addEventListener('click', async () => {
                 if (cameras.length < 2) return;
-                const currentIndex = cameras.findIndex(c => c.deviceId === currentCameraId);
-                currentCameraId = cameras[(currentIndex + 1) % cameras.length].deviceId;
                 
+                const currentIndex = cameras.findIndex(camera => camera.deviceId === currentCameraId);
+                const newIndex = (currentIndex + 1) % cameras.length;
+                currentCameraId = cameras[newIndex].deviceId;
+
                 if (videoStream) {
-                    videoStream.getTracks().forEach(t => t.stop());
+                    videoStream.getTracks().forEach(track => track.stop());
                     elements.video.srcObject = null;
                 }
+
                 await startCamera(currentCameraId);
             });
 
@@ -387,83 +375,44 @@
                 isProcessing = false;
                 currentModelType = this.value;
                 frameBuffer = [];
-                
+
                 if (videoStream) {
-                    videoStream.getTracks().forEach(t => t.stop());
+                    videoStream.getTracks().forEach(track => track.stop());
                     elements.video.srcObject = null;
                 }
+
                 await startCamera(currentCameraId);
             });
 
-            elements.threshold.addEventListener('input', (e) => {
-                confidenceThreshold = e.target.value / 100;
-                elements.thresholdValue.textContent = `${e.target.value}%`;
-                elements.thresholdValue.classList.add('text-indigo-600');
-                setTimeout(() => {
-                    elements.thresholdValue.classList.remove('text-indigo-600');
-                }, 200);
+            elements.threshold.addEventListener('input', (event) => {
+                confidenceThreshold = event.target.value / 100;
+                elements.thresholdValue.textContent = `${event.target.value}%`;
             });
 
             elements.clearBtn.addEventListener('click', () => {
-                elements.output.innerHTML = '<div class="text-gray-400 text-center py-2 text-xs">История очищена</div>';
+                elements.output.innerHTML = '<div class="text-gray-400 text-center py-4">История очищена</div>';
+                elements.confidence.classList.add('hidden');
             });
 
             elements.copyBtn.addEventListener('click', () => {
                 const text = Array.from(elements.output.children)
-                    .map(el => el.textContent)
+                    .map(element => element.textContent)
                     .reverse()
                     .join('\n');
                 
-                navigator.clipboard.writeText(text).then(() => {
-                    const icon = elements.copyBtn.querySelector('i');
-                    icon.className = 'fas fa-check text-green-500';
-                    setTimeout(() => icon.className = 'fas fa-copy', 2000);
-                });
+                navigator.clipboard.writeText(text)
+                    .then(() => {
+                        const icon = elements.copyBtn.querySelector('i');
+                        icon.className = 'fas fa-check text-green-500';
+                        setTimeout(() => {
+                            icon.className = 'fas fa-copy';
+                        }, 2000);
+                    });
             });
 
-            elements.sendDataBtn.addEventListener('click', () => {
-                const text = Array.from(elements.output.children)
-                    .map(el => el.textContent)
-                    .reverse()
-                    .join('\n');
-                
-                if (text.trim()) {
-                    tg.sendData(text);
-                    tg.close();
-                }
-            });
-        };
-
-        // Инициализация приложения
-        const initializeApp = async () => {
-            try {
-                tg.expand();
-                tg.ready();
-                await initCameras();
-                setupEventListeners();
-                
-                if (tg.isVersionAtLeast('6.1')) {
-                    elements.startBtn.hidden = false;
-                }
-
-                // Инициализация значения порога
-                elements.threshold.dispatchEvent(new Event('input'));
-                
-            } catch (error) {
-                safeAlert(`Ошибка инициализации: ${error.message}`);
-            }
-        };
-
-        // Запуск приложения
-        document.addEventListener('DOMContentLoaded', initializeApp);
-
-        // Обработчик закрытия
-        window.handleClose = () => {
-            if (videoStream) {
-                videoStream.getTracks().forEach(track => track.stop());
-            }
-            tg.close();
-        };
+            // Инициализация приложения
+            initCameras();
+        });
     </script>
 </body>
-</html>
+</html> 

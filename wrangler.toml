@@ -1,18 +1,17 @@
 name = "zrzrzr"
-main = "./index.html"  # Главная точка входа
+main = "./index.html"
 compatibility_date = "2024-07-02"
-node_compat = true    # Включить совместимость с Node.js
+node_compat = true
 
 [site]
-bucket = "./"         # Корневая директория проекта
+bucket = "./"
 
-# Правила для статических файлов
 [[rules]]
 globs = ["**/*"]
 headers = { 
   "Cache-Control" = "public, max-age=14400",
-  "Content-Type" = { "html" = "text/html", "css" = "text/css", "js" = "application/javascript" }
+  "Content-Type" = "auto" 
 }
 
 [build]
-command = "echo 'Static site, no build needed'"
+command = "echo 'No build required'"

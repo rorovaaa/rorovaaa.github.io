@@ -170,15 +170,15 @@
         document.addEventListener('DOMContentLoaded', () => {
             const MODEL_CONFIG = {
                 RSL: {
-                    path: './models/rsl_model.onnx',
-                    labels: './labels/RSL_class_list.txt',
+                    path: 'models/rsl_model.onnx',
+                    labels: 'labels/RSL_class_list.txt',
                     inputName: 'actual_input_1',
                     inputShape: [1, 3, 32, 224, 224],
                     frameBufferSize: 32
                 },
                 ASL: {
-                    path: './models/asl_model.onnx',
-                    labels: './labels/h5_classes.txt',
+                    path: 'models/asl_model.onnx',
+                    labels: 'labels/h5_classes.txt',
                     inputName: 'input',
                     inputShape: [1, 1, 28, 28]
                 }

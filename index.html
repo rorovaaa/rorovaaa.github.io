@@ -3,53 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NeuroTalkSignToText - Переводчик жестовых языков в текст</title>
+    <title>NeuroTalkSignToText</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@latest/dist/ort.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f8fafc;
-        }
-        
-        .gradient-bg {
-            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-        }
-        
-        .video-container {
-            position: relative;
-            padding-bottom: 56.25%;
-            height: 0;
-            overflow: hidden;
-            border-radius: 12px;
-            background-color: #000;
-        }
-        
-        .video-container video, 
-        .video-container canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        
-        .processing-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.7);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            color: white;
-        }
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .gradient-bg { background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); }
+        .video-container { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 12px; background-color: #000; }
+        .processing-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: center; color: white; }
     </style>
 </head>
 <body>
@@ -61,12 +24,9 @@
                     <h1 class="text-2xl font-bold">NeuroTalkSignToText</h1>
                 </div>
             </div>
-            
             <div class="mt-16 mb-12 text-center">
-                <h2 class="text-4xl md:text-5xl font-bold mb-4">NeuroTalkSignToText</h2>
-                <p class="text-xl md:text-2xl max-w-3xl mx-auto">
-                    Распознавание русского жестового языка (РЖЯ) и американского жестового языка (ASL) в реальном времени
-                </p>
+                <h2 class="text-4xl md:text-5xl font-bold mb-4">Переводчик жестовых языков</h2>
+                <p class="text-xl md:text-2xl max-w-3xl mx-auto">Реальное распознавание РЖЯ и ASL</p>
             </div>
         </div>
     </header>
@@ -74,12 +34,11 @@
     <main class="container mx-auto px-4 py-12 -mt-10">
         <div class="bg-white rounded-xl shadow-xl overflow-hidden">
             <div class="grid md:grid-cols-2 gap-8 p-8">
-                <!-- Видеовход -->
                 <div>
                     <div class="mb-6">
                         <div class="flex justify-between items-center mb-4">
                             <div class="flex items-center space-x-3">
-                                <select id="sign-language-select" class="bg-gray-100 border border-gray-300 rounded-full py-1 px-4 pr-8 text-sm">
+                                <select id="language-select" class="bg-gray-100 border border-gray-300 rounded-full py-1 px-4 pr-8 text-sm">
                                     <option value="RSL">Русский (РЖЯ)</option>
                                     <option value="ASL">Американский (ASL)</option>
                                 </select>
@@ -88,73 +47,50 @@
                                 </button>
                             </div>
                             <div class="flex items-center space-x-2 text-sm">
-                                <span>Порог уверенности:</span>
-                                <input type="range" id="confidence-threshold" min="0" max="100" value="70" 
-                                       class="w-24 accent-indigo-600">
+                                <span>Порог:</span>
+                                <input type="range" id="confidence-threshold" min="0" max="100" value="70" class="w-24 accent-indigo-600">
                                 <span id="threshold-value">70%</span>
                             </div>
                         </div>
-                        
                         <div class="video-container">
                             <video id="input-video" autoplay muted playsinline class="hidden"></video>
-                            <canvas id="output-canvas"></canvas>
+                            <canvas id="processing-canvas"></canvas>
                             <div id="video-placeholder" class="absolute inset-0 flex flex-col items-center justify-center bg-gray-100">
                                 <i class="fas fa-video-slash text-4xl mb-4 text-gray-400"></i>
-                                <button id="start-camera-btn" class="mt-6 px-6 py-3 gradient-bg text-white rounded-lg font-medium hover:opacity-90 transition flex items-center justify-center space-x-2">
-                                    <i class="fas fa-camera"></i>
-                                    <span>Включить камеру</span>
+                                <button id="start-camera-btn" class="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition">
+                                    Активировать камеру
                                 </button>
                             </div>
-                            <div id="processing-indicator" class="processing-overlay">
+                            <div id="processing-overlay" class="processing-overlay">
                                 <div class="text-center">
-                                    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
-                                    <p class="mt-2">Обработка жестов...</p>
+                                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
+                                    <p class="mt-2">Анализ жеста...</p>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-                
-                <!-- Текстовый вывод -->
                 <div>
                     <div class="mb-6">
                         <div class="flex justify-between items-center mb-4">
-                            <label class="font-medium text-gray-700">Текстовый результат</label>
-                            <div class="flex items-center space-x-3">
-                                <button id="copy-text-btn" class="text-gray-500 hover:text-indigo-600 transition" title="Копировать текст">
-                                    <i class="fas fa-copy"></i>
-                                </button>
-                                <button id="clear-text-btn" class="text-gray-500 hover:text-indigo-600 transition" title="Очистить">
-                                    <i class="fas fa-trash-alt"></i>
-                                </button>
+                            <label class="font-medium text-gray-700">Результаты</label>
+                            <div class="flex space-x-3">
+                                <button id="copy-btn" class="text-gray-500 hover:text-indigo-600"><i class="fas fa-copy"></i></button>
+                                <button id="clear-btn" class="text-gray-500 hover:text-indigo-600"><i class="fas fa-trash"></i></button>
                             </div>
                         </div>
-                        
                         <div class="bg-gray-50 p-4 rounded-lg h-96 overflow-y-auto">
-                            <div id="output-text" class="text-gray-800 space-y-2">
-                                <div class="text-gray-400">Здесь будет отображаться распознанный текст. Включите камеру и начните показывать жесты.</div>
-                            </div>
-                            <div id="confidence-meter" class="mt-4 hidden">
-                                <div class="flex justify-between mb-1">
-                                    <span class="text-sm font-medium text-gray-700">Точность распознавания</span>
-                                    <span id="confidence-value" class="text-sm font-medium">0%</span>
+                            <div id="output" class="space-y-2"></div>
+                            <div id="confidence" class="mt-4 hidden">
+                                <div class="flex justify-between mb-1 text-sm">
+                                    <span>Уверенность:</span>
+                                    <span id="confidence-value">0%</span>
                                 </div>
-                                <div class="w-full bg-gray-200 rounded-full h-2.5">
-                                    <div id="confidence-bar" class="bg-indigo-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                                <div class="h-2 bg-gray-200 rounded-full">
+                                    <div id="confidence-bar" class="h-2 bg-indigo-600 rounded-full transition-all" style="width: 0%"></div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                    
-                    <div class="bg-indigo-50 p-4 rounded-lg">
-                        <h3 class="font-medium text-gray-700 mb-2">Советы для лучшего распознавания:</h3>
-                        <ul class="list-disc list-inside text-sm text-gray-600 space-y-1">
-                            <li>Держите руки в поле зрения камеры</li>
-                            <li>Используйте четкие, стандартные жесты</li>
-                            <li>Обеспечьте хорошее освещение</li>
-                            <li>Держите фон однотонным</li>
-                            <li>Показывайте жесты по одному с паузами</li>
-                        </ul>
                     </div>
                 </div>
             </div>
@@ -167,12 +103,15 @@
                 RSL: {
                     path: 'models/rsl_model.onnx',
                     labels: 'labels/RSL_class_list.txt',
-                    inputSize: [224, 224]
+                    inputName: 'actual_input_1',
+                    inputShape: [1, 3, 32, 224, 224],
+                    frameBufferSize: 32
                 },
                 ASL: {
                     path: 'models/asl_model.onnx',
-                    labels: 'labels/h5_classses.txt',
-                    inputSize: [224, 224]
+                    labels: 'labels/h5_classes.txt',
+                    inputName: 'input',
+                    inputShape: [1, 1, 28, 28]
                 }
             };
 
@@ -182,23 +121,23 @@
             let videoStream = null;
             let currentModelType = 'RSL';
             let confidenceThreshold = 0.7;
+            let frameBuffer = [];
             let cameras = [];
             let currentCameraId = '';
 
-            // Элементы DOM
             const elements = {
                 video: document.getElementById('input-video'),
-                canvas: document.getElementById('output-canvas'),
+                canvas: document.getElementById('processing-canvas'),
                 startBtn: document.getElementById('start-camera-btn'),
-                output: document.getElementById('output-text'),
-                processing: document.getElementById('processing-indicator'),
-                confidence: document.getElementById('confidence-meter'),
+                output: document.getElementById('output'),
+                processing: document.getElementById('processing-overlay'),
+                confidence: document.getElementById('confidence'),
                 confidenceValue: document.getElementById('confidence-value'),
                 confidenceBar: document.getElementById('confidence-bar'),
                 threshold: document.getElementById('confidence-threshold'),
                 thresholdValue: document.getElementById('threshold-value'),
                 switchCamera: document.getElementById('switch-camera'),
-                languageSelect: document.getElementById('sign-language-select')
+                languageSelect: document.getElementById('language-select')
             };
 
             // Инициализация камер
@@ -217,7 +156,6 @@
                 try {
                     const response = await fetch(MODEL_CONFIG[modelType].labels);
                     const text = await response.text();
-                    
                     return modelType === 'RSL' 
                         ? text.split('\n').map(line => line.split('\t')[1]?.trim() || 'Unknown')
                         : text.split('\n').map(line => line.split(' ')[1]?.trim() || 'Unknown');
@@ -231,7 +169,6 @@
             async function initializeModel(modelType) {
                 try {
                     elements.processing.style.display = 'flex';
-                    
                     currentLabels = await loadLabels(modelType);
                     if(currentLabels.length === 0) throw new Error('Метки не загружены');
 
@@ -240,7 +177,7 @@
                     return true;
                 } catch (error) {
                     console.error(`Ошибка загрузки ${modelType}:`, error);
-                    alert(`Ошибка загрузки ${modelType} модели`);
+                    alert(`Ошибка загрузки модели: ${error.message}`);
                     return false;
                 } finally {
                     elements.processing.style.display = 'none';
@@ -248,30 +185,60 @@
             }
 
             // Предобработка кадра
-            function preprocessFrame(frame) {
-                const canvas = document.createElement('canvas');
-                [canvas.width, canvas.height] = MODEL_CONFIG[currentModelType].inputSize;
-                
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
-                
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const data = new Float32Array(3 * canvas.width * canvas.height);
+            function preprocessFrame() {
+                const config = MODEL_CONFIG[currentModelType];
+                const ctx = elements.canvas.getContext('2d');
 
-                for(let i = 0; i < imageData.data.length; i += 4) {
-                    data[i/4] = imageData.data[i] / 255;
-                    data[i/4 + canvas.width*canvas.height] = imageData.data[i+1] / 255;
-                    data[i/4 + 2*canvas.width*canvas.height] = imageData.data[i+2] / 255;
+                if(currentModelType === 'RSL') {
+                    // Обработка для RSL модели
+                    elements.canvas.width = 224;
+                    elements.canvas.height = 224;
+                    ctx.drawImage(elements.video, 0, 0, 224, 224);
+
+                    const imageData = ctx.getImageData(0, 0, 224, 224);
+                    const frameData = new Float32Array(3 * 224 * 224);
+
+                    for(let i = 0; i < imageData.data.length; i += 4) {
+                        frameData[i/4] = imageData.data[i] / 255;
+                        frameData[i/4 + 224*224] = imageData.data[i+1] / 255;
+                        frameData[i/4 + 2*224*224] = imageData.data[i+2] / 255;
+                    }
+
+                    frameBuffer.push(frameData);
+                    if(frameBuffer.length > config.frameBufferSize) frameBuffer.shift();
+
+                    const tensorData = new Float32Array(config.inputShape.reduce((a,b) => a*b));
+                    let offset = 0;
+                    for(let i = 0; i < config.frameBufferSize; i++) {
+                        const frame = frameBuffer[i] || new Float32Array(3*224*224);
+                        tensorData.set(frame, offset);
+                        offset += frame.length;
+                    }
+
+                    return new ort.Tensor('float32', tensorData, config.inputShape);
+                } else {
+                    // Обработка для ASL модели
+                    elements.canvas.width = 28;
+                    elements.canvas.height = 28;
+                    ctx.drawImage(elements.video, 0, 0, 28, 28);
+
+                    const imageData = ctx.getImageData(0, 0, 28, 28);
+                    const data = new Float32Array(1*1*28*28);
+
+                    for(let i = 0; i < imageData.data.length; i += 4) {
+                        const gray = (imageData.data[i] + imageData.data[i+1] + imageData.data[i+2]) / 3;
+                        data[i/4] = gray / 255;
+                    }
+
+                    return new ort.Tensor('float32', data, config.inputShape);
                 }
-                
-                return new ort.Tensor('float32', data, [1, 3, canvas.height, canvas.width]);
             }
 
             // Обработка предсказаний
             function handlePredictions(predictions) {
                 const scores = Array.from(predictions.data);
                 const softmax = scores.map(x => Math.exp(x));
-                const sum = softmax.reduce((a, b) => a + b, 0);
+                const sum = softmax.reduce((a,b) => a + b, 0);
                 const probabilities = softmax.map(x => x / sum);
                 
                 const maxProb = Math.max(...probabilities);
@@ -279,11 +246,11 @@
 
                 if(maxProb >= confidenceThreshold) {
                     const entry = document.createElement('div');
-                    entry.className = 'text-indigo-600 font-medium';
+                    entry.className = 'p-2 bg-white rounded shadow-sm';
                     entry.innerHTML = `
-                        <span class="text-gray-500 text-sm">[${new Date().toLocaleTimeString()}]</span>
-                        ${currentLabels[predictedIndex]} 
-                        <span class="text-indigo-400">(${(maxProb * 100).toFixed(1)}%)</span>
+                        <span class="text-gray-500 text-sm">${new Date().toLocaleTimeString()}</span>
+                        <span class="font-medium ml-2">${currentLabels[predictedIndex]}</span>
+                        <span class="text-indigo-500 ml-2">${(maxProb * 100).toFixed(1)}%</span>
                     `;
                     elements.output.prepend(entry);
                 }
@@ -296,11 +263,12 @@
             // Основной цикл обработки
             async function processFrame() {
                 if(!isProcessing || !currentModel) return;
-
                 try {
-                    const inputTensor = preprocessFrame(elements.video);
-                    const { output } = await currentModel.run({ input: inputTensor });
-                    handlePredictions(output);
+                    const inputTensor = preprocessFrame();
+                    const results = await currentModel.run({ 
+                        [MODEL_CONFIG[currentModelType].inputName]: inputTensor 
+                    });
+                    handlePredictions(results[Object.keys(results)[0]]);
                 } catch (error) {
                     console.error('Ошибка обработки кадра:', error);
                 }
@@ -313,9 +281,9 @@
                     const constraints = {
                         video: { 
                             deviceId: deviceId ? { exact: deviceId } : undefined,
-                            width: { ideal: 1280 }, 
-                            height: { ideal: 720 },
-                            facingMode: deviceId ? undefined : 'user'
+                            width: { ideal: currentModelType === 'RSL' ? 224 : 28 },
+                            height: { ideal: currentModelType === 'RSL' ? 224 : 28 },
+                            facingMode: 'user'
                         }
                     };
 
@@ -336,55 +304,37 @@
 
             // Обработчики событий
             elements.startBtn.addEventListener('click', () => startCamera());
-            
             elements.switchCamera.addEventListener('click', async () => {
                 if(cameras.length < 2) return;
-                
-                currentCameraId = cameras[
-                    (cameras.findIndex(c => c.deviceId === currentCameraId) + 1) % cameras.length
-                ].deviceId;
-                
-                if(videoStream) {
-                    videoStream.getTracks().forEach(track => track.stop());
-                    elements.video.srcObject = null;
-                }
-                
+                currentCameraId = cameras[(cameras.findIndex(c => c.deviceId === currentCameraId) + 1]?.deviceId || cameras[0].deviceId;
+                if(videoStream) videoStream.getTracks().forEach(track => track.stop());
                 await startCamera(currentCameraId);
             });
 
             elements.languageSelect.addEventListener('change', async function() {
                 isProcessing = false;
                 currentModelType = this.value;
-                
-                if(videoStream) {
-                    videoStream.getTracks().forEach(track => track.stop());
-                    elements.video.srcObject = null;
-                }
-                
+                frameBuffer = [];
+                if(videoStream) videoStream.getTracks().forEach(track => track.stop());
                 await startCamera(currentCameraId);
-            });
-
-            document.getElementById('clear-text-btn').addEventListener('click', () => {
-                elements.output.innerHTML = '<div class="text-gray-400">История очищена</div>';
-                elements.confidence.classList.add('hidden');
-            });
-
-            document.getElementById('copy-text-btn').addEventListener('click', () => {
-                const text = Array.from(elements.output.children)
-                    .map(el => el.textContent)
-                    .reverse()
-                    .join('\n');
-                
-                navigator.clipboard.writeText(text).then(() => {
-                    const icon = document.getElementById('copy-text-btn').querySelector('i');
-                    icon.className = 'fas fa-check text-green-500';
-                    setTimeout(() => icon.className = 'fas fa-copy', 2000);
-                });
             });
 
             elements.threshold.addEventListener('input', (e) => {
                 confidenceThreshold = e.target.value / 100;
                 elements.thresholdValue.textContent = `${e.target.value}%`;
+            });
+
+            elements.clearBtn.addEventListener('click', () => {
+                elements.output.innerHTML = '<div class="text-gray-400 text-center py-4">Результаты очищены</div>';
+                elements.confidence.classList.add('hidden');
+            });
+
+            elements.copyBtn.addEventListener('click', () => {
+                const text = Array.from(elements.output.children)
+                    .map(el => el.textContent)
+                    .reverse()
+                    .join('\n');
+                navigator.clipboard.writeText(text);
             });
 
             // Инициализация

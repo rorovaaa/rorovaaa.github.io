@@ -1,3 +1,16 @@
-name = "my-worker"
-main = "index.html"  # Путь к вашему Worker-скрипту
-compatibility_date = "2025-05-19"
+name = "translater"
+main = "./index.html"  # Точка входа для статического сайта
+compatibility_date = "2024-07-02"
+
+[site]
+bucket = "./"          # Корневая директория проекта
+entry-point = "."      # Точка входа для деплоя
+
+[[rules]]
+globs = ["**/*"]       # Включаем все файлы
+headers = { "Cache-Control" = "public, max-age=14400" }
+
+# Для обработки моделей и лейблов (если нужно)
+[build]
+command = "echo 'No build needed'"  # Или ваша команда сборки
+upload_dir = "models"              # Директория с моделями

@@ -3,16 +3,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NeuroTalkSignToText</title>
+    <title>NeuroTalkSignToText - Переводчик жестовых языков</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@latest/dist/ort.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
-        .gradient-bg { background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); }
-        .video-container { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 12px; background-color: #000; }
-        .processing-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: center; color: white; }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f8fafc; 
+        }
+        .gradient-bg { 
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); 
+        }
+        .video-container { 
+            position: relative; 
+            padding-bottom: 56.25%; 
+            height: 0; 
+            overflow: hidden; 
+            border-radius: 12px; 
+            background-color: #000; 
+        }
+        .video-container video, 
+        .video-container canvas { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            object-fit: cover; 
+        }
+        .processing-overlay { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            background: rgba(0,0,0,0.7); 
+            display: none; 
+            justify-content: center; 
+            align-items: center; 
+            color: white; 
+        }
     </style>
 </head>
 <body>
@@ -26,7 +58,9 @@
             </div>
             <div class="mt-16 mb-12 text-center">
                 <h2 class="text-4xl md:text-5xl font-bold mb-4">Переводчик жестовых языков</h2>
-                <p class="text-xl md:text-2xl max-w-3xl mx-auto">Реальное распознавание РЖЯ и ASL</p>
+                <p class="text-xl md:text-2xl max-w-3xl mx-auto">
+                    Реальное распознавание РЖЯ и ASL в реальном времени
+                </p>
             </div>
         </div>
     </header>
@@ -34,6 +68,7 @@
     <main class="container mx-auto px-4 py-12 -mt-10">
         <div class="bg-white rounded-xl shadow-xl overflow-hidden">
             <div class="grid md:grid-cols-2 gap-8 p-8">
+                <!-- Блок с видео -->
                 <div>
                     <div class="mb-6">
                         <div class="flex justify-between items-center mb-4">
@@ -47,7 +82,7 @@
                                 </button>
                             </div>
                             <div class="flex items-center space-x-2 text-sm">
-                                <span>Порог:</span>
+                                <span>Порог уверенности:</span>
                                 <input type="range" id="confidence-threshold" min="0" max="100" value="70" class="w-24 accent-indigo-600">
                                 <span id="threshold-value">70%</span>
                             </div>
@@ -64,19 +99,25 @@
                             <div id="processing-overlay" class="processing-overlay">
                                 <div class="text-center">
                                     <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
-                                    <p class="mt-2">Анализ жеста...</p>
+                                    <p class="mt-2">Обработка жеста...</p>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
+
+                <!-- Блок с результатами -->
                 <div>
                     <div class="mb-6">
                         <div class="flex justify-between items-center mb-4">
-                            <label class="font-medium text-gray-700">Результаты</label>
+                            <label class="font-medium text-gray-700">Результаты распознавания</label>
                             <div class="flex space-x-3">
-                                <button id="copy-btn" class="text-gray-500 hover:text-indigo-600"><i class="fas fa-copy"></i></button>
-                                <button id="clear-btn" class="text-gray-500 hover:text-indigo-600"><i class="fas fa-trash"></i></button>
+                                <button id="copy-btn" class="text-gray-500 hover:text-indigo-600">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                                <button id="clear-btn" class="text-gray-500 hover:text-indigo-600">
+                                    <i class="fas fa-trash"></i>
+                                </button>
                             </div>
                         </div>
                         <div class="bg-gray-50 p-4 rounded-lg h-96 overflow-y-auto">
@@ -99,6 +140,7 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            // Конфигурация моделей
             const MODEL_CONFIG = {
                 RSL: {
                     path: 'models/rsl_model.onnx',
@@ -115,6 +157,7 @@
                 }
             };
 
+            // Состояние приложения
             let currentModel = null;
             let currentLabels = [];
             let isProcessing = false;
@@ -125,6 +168,7 @@
             let cameras = [];
             let currentCameraId = '';
 
+            // Элементы DOM
             const elements = {
                 video: document.getElementById('input-video'),
                 canvas: document.getElementById('processing-canvas'),
@@ -140,23 +184,25 @@
                 languageSelect: document.getElementById('language-select')
             };
 
-            // Инициализация камер
+            // Инициализация списка камер
             async function initCameras() {
                 try {
                     const devices = await navigator.mediaDevices.enumerateDevices();
-                    cameras = devices.filter(d => d.kind === 'videoinput');
-                    if(cameras.length > 0) currentCameraId = cameras[0].deviceId;
+                    cameras = devices.filter(device => device.kind === 'videoinput');
+                    if (cameras.length > 0) {
+                        currentCameraId = cameras[0].deviceId;
+                    }
                 } catch (error) {
-                    console.error('Ошибка получения камер:', error);
+                    console.error('Ошибка получения списка камер:', error);
                 }
             }
 
-            // Загрузка меток
+            // Загрузка меток классов
             async function loadLabels(modelType) {
                 try {
                     const response = await fetch(MODEL_CONFIG[modelType].labels);
                     const text = await response.text();
-                    return modelType === 'RSL' 
+                    return modelType === 'RSL'
                         ? text.split('\n').map(line => line.split('\t')[1]?.trim() || 'Unknown')
                         : text.split('\n').map(line => line.split(' ')[1]?.trim() || 'Unknown');
                 } catch (error) {
@@ -170,13 +216,15 @@
                 try {
                     elements.processing.style.display = 'flex';
                     currentLabels = await loadLabels(modelType);
-                    if(currentLabels.length === 0) throw new Error('Метки не загружены');
+                    if (currentLabels.length === 0) {
+                        throw new Error('Не удалось загрузить метки классов');
+                    }
 
                     currentModel = await ort.InferenceSession.create(MODEL_CONFIG[modelType].path);
-                    console.log(`${modelType} модель загружена`);
+                    console.log(`${modelType} модель успешно загружена`);
                     return true;
                 } catch (error) {
-                    console.error(`Ошибка загрузки ${modelType}:`, error);
+                    console.error(`Ошибка загрузки модели ${modelType}:`, error);
                     alert(`Ошибка загрузки модели: ${error.message}`);
                     return false;
                 } finally {
@@ -189,8 +237,8 @@
                 const config = MODEL_CONFIG[currentModelType];
                 const ctx = elements.canvas.getContext('2d');
 
-                if(currentModelType === 'RSL') {
-                    // Обработка для RSL модели
+                if (currentModelType === 'RSL') {
+                    // Обработка для модели RSL
                     elements.canvas.width = 224;
                     elements.canvas.height = 224;
                     ctx.drawImage(elements.video, 0, 0, 224, 224);
@@ -198,75 +246,78 @@
                     const imageData = ctx.getImageData(0, 0, 224, 224);
                     const frameData = new Float32Array(3 * 224 * 224);
 
-                    for(let i = 0; i < imageData.data.length; i += 4) {
-                        frameData[i/4] = imageData.data[i] / 255;
-                        frameData[i/4 + 224*224] = imageData.data[i+1] / 255;
-                        frameData[i/4 + 2*224*224] = imageData.data[i+2] / 255;
+                    for (let i = 0; i < imageData.data.length; i += 4) {
+                        frameData[i / 4] = imageData.data[i] / 255;         // R
+                        frameData[i / 4 + 224 * 224] = imageData.data[i + 1] / 255;  // G
+                        frameData[i / 4 + 2 * 224 * 224] = imageData.data[i + 2] / 255; // B
                     }
 
                     frameBuffer.push(frameData);
-                    if(frameBuffer.length > config.frameBufferSize) frameBuffer.shift();
+                    if (frameBuffer.length > config.frameBufferSize) {
+                        frameBuffer.shift();
+                    }
 
-                    const tensorData = new Float32Array(config.inputShape.reduce((a,b) => a*b));
+                    const tensorData = new Float32Array(config.inputShape.reduce((a, b) => a * b, 1));
                     let offset = 0;
-                    for(let i = 0; i < config.frameBufferSize; i++) {
-                        const frame = frameBuffer[i] || new Float32Array(3*224*224);
+                    for (let i = 0; i < config.frameBufferSize; i++) {
+                        const frame = frameBuffer[i] || new Float32Array(3 * 224 * 224).fill(0);
                         tensorData.set(frame, offset);
                         offset += frame.length;
                     }
 
                     return new ort.Tensor('float32', tensorData, config.inputShape);
                 } else {
-                    // Обработка для ASL модели
+                    // Обработка для модели ASL
                     elements.canvas.width = 28;
                     elements.canvas.height = 28;
                     ctx.drawImage(elements.video, 0, 0, 28, 28);
 
                     const imageData = ctx.getImageData(0, 0, 28, 28);
-                    const data = new Float32Array(1*1*28*28);
+                    const data = new Float32Array(1 * 1 * 28 * 28);
 
-                    for(let i = 0; i < imageData.data.length; i += 4) {
-                        const gray = (imageData.data[i] + imageData.data[i+1] + imageData.data[i+2]) / 3;
-                        data[i/4] = gray / 255;
+                    for (let i = 0; i < imageData.data.length; i += 4) {
+                        const grayValue = (imageData.data[i] + imageData.data[i + 1] + imageData.data[i + 2]) / 3;
+                        data[i / 4] = grayValue / 255;
                     }
 
                     return new ort.Tensor('float32', data, config.inputShape);
                 }
             }
 
-            // Обработка предсказаний
+            // Обработка результатов предсказания
             function handlePredictions(predictions) {
                 const scores = Array.from(predictions.data);
                 const softmax = scores.map(x => Math.exp(x));
-                const sum = softmax.reduce((a,b) => a + b, 0);
+                const sum = softmax.reduce((a, b) => a + b, 0);
                 const probabilities = softmax.map(x => x / sum);
-                
-                const maxProb = Math.max(...probabilities);
-                const predictedIndex = probabilities.indexOf(maxProb);
 
-                if(maxProb >= confidenceThreshold) {
+                const maxProbability = Math.max(...probabilities);
+                const predictedIndex = probabilities.indexOf(maxProbability);
+
+                if (maxProbability >= confidenceThreshold) {
                     const entry = document.createElement('div');
                     entry.className = 'p-2 bg-white rounded shadow-sm';
                     entry.innerHTML = `
                         <span class="text-gray-500 text-sm">${new Date().toLocaleTimeString()}</span>
                         <span class="font-medium ml-2">${currentLabels[predictedIndex]}</span>
-                        <span class="text-indigo-500 ml-2">${(maxProb * 100).toFixed(1)}%</span>
+                        <span class="text-indigo-500 ml-2">${(maxProbability * 100).toFixed(1)}%</span>
                     `;
                     elements.output.prepend(entry);
                 }
 
-                elements.confidenceValue.textContent = `${(maxProb * 100).toFixed(1)}%`;
-                elements.confidenceBar.style.width = `${(maxProb * 100).toFixed(1)}%`;
+                elements.confidenceValue.textContent = `${(maxProbability * 100).toFixed(1)}%`;
+                elements.confidenceBar.style.width = `${(maxProbability * 100).toFixed(1)}%`;
                 elements.confidence.classList.remove('hidden');
             }
 
             // Основной цикл обработки
             async function processFrame() {
-                if(!isProcessing || !currentModel) return;
+                if (!isProcessing || !currentModel) return;
+
                 try {
                     const inputTensor = preprocessFrame();
-                    const results = await currentModel.run({ 
-                        [MODEL_CONFIG[currentModelType].inputName]: inputTensor 
+                    const results = await currentModel.run({
+                        [MODEL_CONFIG[currentModelType].inputName]: inputTensor
                     });
                     handlePredictions(results[Object.keys(results)[0]]);
                 } catch (error) {
@@ -279,7 +330,7 @@
             async function startCamera(deviceId = '') {
                 try {
                     const constraints = {
-                        video: { 
+                        video: {
                             deviceId: deviceId ? { exact: deviceId } : undefined,
                             width: { ideal: currentModelType === 'RSL' ? 224 : 28 },
                             height: { ideal: currentModelType === 'RSL' ? 224 : 28 },
@@ -291,23 +342,32 @@
                     elements.video.srcObject = videoStream;
                     elements.video.classList.remove('hidden');
                     document.getElementById('video-placeholder').classList.add('hidden');
-                    
-                    if(await initializeModel(currentModelType)) {
+
+                    if (await initializeModel(currentModelType)) {
                         isProcessing = true;
                         processFrame();
                     }
                 } catch (error) {
-                    alert('Ошибка доступа к камере');
-                    console.error('Camera error:', error);
+                    console.error('Ошибка доступа к камере:', error);
+                    alert('Не удалось получить доступ к камере');
                 }
             }
 
             // Обработчики событий
             elements.startBtn.addEventListener('click', () => startCamera());
+
             elements.switchCamera.addEventListener('click', async () => {
-                if(cameras.length < 2) return;
-                currentCameraId = cameras[(cameras.findIndex(c => c.deviceId === currentCameraId) + 1]?.deviceId || cameras[0].deviceId;
-                if(videoStream) videoStream.getTracks().forEach(track => track.stop());
+                if (cameras.length < 2) return;
+                
+                const currentIndex = cameras.findIndex(camera => camera.deviceId === currentCameraId);
+                const newIndex = (currentIndex + 1) % cameras.length;
+                currentCameraId = cameras[newIndex].deviceId;
+
+                if (videoStream) {
+                    videoStream.getTracks().forEach(track => track.stop());
+                    elements.video.srcObject = null;
+                }
+
                 await startCamera(currentCameraId);
             });
 
@@ -315,29 +375,42 @@
                 isProcessing = false;
                 currentModelType = this.value;
                 frameBuffer = [];
-                if(videoStream) videoStream.getTracks().forEach(track => track.stop());
+
+                if (videoStream) {
+                    videoStream.getTracks().forEach(track => track.stop());
+                    elements.video.srcObject = null;
+                }
+
                 await startCamera(currentCameraId);
             });
 
-            elements.threshold.addEventListener('input', (e) => {
-                confidenceThreshold = e.target.value / 100;
-                elements.thresholdValue.textContent = `${e.target.value}%`;
+            elements.threshold.addEventListener('input', (event) => {
+                confidenceThreshold = event.target.value / 100;
+                elements.thresholdValue.textContent = `${event.target.value}%`;
             });
 
             elements.clearBtn.addEventListener('click', () => {
-                elements.output.innerHTML = '<div class="text-gray-400 text-center py-4">Результаты очищены</div>';
+                elements.output.innerHTML = '<div class="text-gray-400 text-center py-4">История очищена</div>';
                 elements.confidence.classList.add('hidden');
             });
 
             elements.copyBtn.addEventListener('click', () => {
                 const text = Array.from(elements.output.children)
-                    .map(el => el.textContent)
+                    .map(element => element.textContent)
                     .reverse()
                     .join('\n');
-                navigator.clipboard.writeText(text);
+                
+                navigator.clipboard.writeText(text)
+                    .then(() => {
+                        const icon = elements.copyBtn.querySelector('i');
+                        icon.className = 'fas fa-check text-green-500';
+                        setTimeout(() => {
+                            icon.className = 'fas fa-copy';
+                        }, 2000);
+                    });
             });
 
-            // Инициализация
+            // Инициализация приложения
             initCameras();
         });
     </script>

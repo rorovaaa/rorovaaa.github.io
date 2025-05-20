@@ -4,7 +4,7 @@ uvicorn==0.15.0
 python-multipart==0.0.5
 
 # Обработка изображений и данные
-numpy==1.21.2
+numpy
 opencv-python==4.5.3.56
 Pillow==8.3.2
 

@@ -1,15 +1,31 @@
 {
-  "version": 2,
   "builds": [
     {
-      "src": "api/processor.py",
+      "src": "api/processor.py.py",
       "use": "@vercel/python"
+    },
+    {
+      "src": "static/*",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
     {
+      "src": "/api/(.*)",
+      "dest": "/api/processor.py.py"
+    },
+    {
       "src": "/(.*)",
-      "dest": "api/processor.py"
+      "dest": "/static/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET,POST,DELETE" }
+      ]
     }
   ]
 }

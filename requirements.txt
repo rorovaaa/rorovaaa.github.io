@@ -1,0 +1,18 @@
+# Основные зависимости
+fastapi==0.68.0
+uvicorn==0.15.0
+python-multipart==0.0.5
+
+# Обработка изображений и данные
+numpy==1.21.2
+opencv-python==4.5.3.56
+Pillow==8.3.2
+
+# Машинное обучение
+onnxruntime==1.10.0
+tensorflow==2.6.0
+keras==2.6.0
+
+# Дополнительные утилиты
+python-dotenv==0.19.0
+loguru==0.5.3

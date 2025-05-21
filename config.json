@@ -1,8 +1,0 @@
-{
-    "path_to_model": "models/rsl_model.onnx",
-    "threshold": 0.5,
-    "topk": 1,
-    "path_to_class_list": "labels/RSL_class_list.txt",
-    "window_size": 32,
-    "provider": "CPUExecutionProvider"
-}

@@ -68,7 +68,6 @@
     <main class="container mx-auto px-4 py-12 -mt-10">
         <div class="bg-white rounded-xl shadow-xl overflow-hidden">
             <div class="grid md:grid-cols-2 gap-8 p-8">
-                <!-- Блок с видео -->
                 <div>
                     <div class="mb-6">
                         <div class="flex justify-between items-center mb-4">
@@ -106,7 +105,6 @@
                     </div>
                 </div>
 
-                <!-- Блок с результатами -->
                 <div>
                     <div class="mb-6">
                         <div class="flex justify-between items-center mb-4">
@@ -140,7 +138,6 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // Конфигурация моделей
             const MODEL_CONFIG = {
                 RSL: {
                     path: 'models/rsl_model.onnx',
@@ -157,7 +154,6 @@
                 }
             };
 
-            // Состояние приложения
             let currentModel = null;
             let currentLabels = [];
             let isProcessing = false;
@@ -167,8 +163,11 @@
             let frameBuffer = [];
             let cameras = [];
             let currentCameraId = '';
+            let isProcessingFrame = false;
+            let lastFrameTime = 0;
+            const TARGET_FPS = 60;
+            const FRAME_INTERVAL = 1000 / TARGET_FPS;
 
-            // Элементы DOM
             const elements = {
                 video: document.getElementById('input-video'),
                 canvas: document.getElementById('processing-canvas'),
@@ -184,7 +183,6 @@
                 languageSelect: document.getElementById('language-select')
             };
 
-            // Инициализация списка камер
             async function initCameras() {
                 try {
                     const devices = await navigator.mediaDevices.enumerateDevices();
@@ -197,7 +195,6 @@
                 }
             }
 
-            // Загрузка меток классов
             async function loadLabels(modelType) {
                 try {
                     const response = await fetch(MODEL_CONFIG[modelType].labels);
@@ -211,7 +208,6 @@
                 }
             }
 
-            // Инициализация модели
             async function initializeModel(modelType) {
                 try {
                     elements.processing.style.display = 'flex';
@@ -232,13 +228,11 @@
                 }
             }
 
-            // Предобработка кадра
             function preprocessFrame() {
                 const config = MODEL_CONFIG[currentModelType];
                 const ctx = elements.canvas.getContext('2d');
 
                 if (currentModelType === 'RSL') {
-                    // Обработка для модели RSL
                     elements.canvas.width = 224;
                     elements.canvas.height = 224;
                     ctx.drawImage(elements.video, 0, 0, 224, 224);
@@ -247,9 +241,9 @@
                     const frameData = new Float32Array(3 * 224 * 224);
 
                     for (let i = 0; i < imageData.data.length; i += 4) {
-                        frameData[i / 4] = imageData.data[i] / 255;         // R
-                        frameData[i / 4 + 224 * 224] = imageData.data[i + 1] / 255;  // G
-                        frameData[i / 4 + 2 * 224 * 224] = imageData.data[i + 2] / 255; // B
+                        frameData[i / 4] = imageData.data[i] / 255;
+                        frameData[i / 4 + 224 * 224] = imageData.data[i + 1] / 255;
+                        frameData[i / 4 + 2 * 224 * 224] = imageData.data[i + 2] / 255;
                     }
 
                     frameBuffer.push(frameData);
@@ -267,7 +261,6 @@
 
                     return new ort.Tensor('float32', tensorData, config.inputShape);
                 } else {
-                    // Обработка для модели ASL
                     elements.canvas.width = 28;
                     elements.canvas.height = 28;
                     ctx.drawImage(elements.video, 0, 0, 28, 28);
@@ -284,7 +277,6 @@
                 }
             }
 
-            // Обработка результатов предсказания
             function handlePredictions(predictions) {
                 const scores = Array.from(predictions.data);
                 const softmax = scores.map(x => Math.exp(x));
@@ -310,9 +302,22 @@
                 elements.confidence.classList.remove('hidden');
             }
 
-            // Основной цикл обработки
-            async function processFrame() {
-                if (!isProcessing || !currentModel) return;
+            async function processFrame(timestamp) {
+                if (!isProcessing || !currentModel || isProcessingFrame) {
+                    requestAnimationFrame(processFrame);
+                    return;
+                }
+
+                const now = performance.now();
+                const elapsed = now - lastFrameTime;
+                
+                if (elapsed < FRAME_INTERVAL) {
+                    requestAnimationFrame(processFrame);
+                    return;
+                }
+
+                lastFrameTime = now - (elapsed % FRAME_INTERVAL);
+                isProcessingFrame = true;
 
                 try {
                     const inputTensor = preprocessFrame();
@@ -322,11 +327,12 @@
                     handlePredictions(results[Object.keys(results)[0]]);
                 } catch (error) {
                     console.error('Ошибка обработки кадра:', error);
+                } finally {
+                    isProcessingFrame = false;
+                    requestAnimationFrame(processFrame);
                 }
-                requestAnimationFrame(processFrame);
             }
 
-            // Запуск камеры
             async function startCamera(deviceId = '') {
                 try {
                     const constraints = {
@@ -345,7 +351,8 @@
 
                     if (await initializeModel(currentModelType)) {
                         isProcessing = true;
-                        processFrame();
+                        lastFrameTime = performance.now();
+                        requestAnimationFrame(processFrame);
                     }
                 } catch (error) {
                     console.error('Ошибка доступа к камере:', error);
@@ -353,7 +360,6 @@
                 }
             }
 
-            // Обработчики событий
             elements.startBtn.addEventListener('click', () => startCamera());
 
             elements.switchCamera.addEventListener('click', async () => {
@@ -410,7 +416,6 @@
                     });
             });
 
-            // Инициализация приложения
             initCameras();
         });
     </script>

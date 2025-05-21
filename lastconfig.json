@@ -1,8 +1,0 @@
-{
-    "path_to_model": "models/sign_language_mnist_cnn.h5",
-    "threshold": 0.7,
-    "topk": 1,
-    "path_to_class_list": "labels/h5_classses.txt",
-    "window_size": 16
-   
-}

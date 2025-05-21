@@ -8,6 +8,7 @@
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@latest/dist/ort.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        /* Сохраняем оригинальные стили без изменений */
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         body { 
             font-family: 'Inter', sans-serif; 
@@ -65,7 +66,7 @@
             <div class="mt-16 mb-12 text-center">
                 <h2 class="text-4xl md:text-5xl font-bold mb-4">Переводчик жестовых языков</h2>
                 <p class="text-xl md:text-2xl max-w-3xl mx-auto">
-                    Реальное распознавание РЖЯ и ASL в реальном времени
+                    Реальное распознавание РЖЯ в реальном времени
                 </p>
             </div>
         </div>
@@ -78,9 +79,8 @@
                     <div class="mb-6">
                         <div class="flex justify-between items-center mb-4">
                             <div class="flex items-center space-x-3">
-                                <select id="language-select" class="bg-gray-100 border border-gray-300 rounded-full py-1 px-4 pr-8 text-sm">
+                                <select id="language-select" class="bg-gray-100 border border-gray-300 rounded-full py-1 px-4 pr-8 text-sm" disabled>
                                     <option value="RSL">Русский (РЖЯ)</option>
-                                    <option value="ASL">Американский (ASL)</option>
                                 </select>
                                 <button id="switch-camera" class="text-gray-700 hover:text-indigo-600 transition" title="Сменить камеру">
                                     <i class="fas fa-camera-retro"></i>
@@ -153,13 +153,6 @@
                     inputShape: [1, 3, 32, 224, 224],
                     frameBufferSize: 32,
                     frameRate: 30
-                },
-                ASL: {
-                    path: 'models/asl_model.onnx',
-                    labels: 'labels/asl_classes.txt',
-                    inputName: 'input',
-                    inputShape: [1, 1, 28, 28],
-                    frameRate: 15
                 }
             };
 
@@ -247,12 +240,11 @@
             }
 
             function preprocessFrame() {
-                const config = MODEL_CONFIG[currentModelType];
+                const config = MODEL_CONFIG.RSL;
                 const ctx = elements.canvas.getContext('2d', { willReadFrequently: true });
                 
-                // Установка фиксированных размеров для моделей
-                const width = currentModelType === 'RSL' ? 224 : 28;
-                const height = currentModelType === 'RSL' ? 224 : 28;
+                const width = 224;
+                const height = 224;
                 
                 elements.canvas.width = width;
                 elements.canvas.height = height;
@@ -265,47 +257,31 @@
                     0, 0, width, height
                 );
 
-                if (currentModelType === 'RSL') {
-                    const imageData = ctx.getImageData(0, 0, width, height);
-                    const frameData = new Float32Array(3 * width * height);
+                const imageData = ctx.getImageData(0, 0, width, height);
+                const frameData = new Float32Array(3 * width * height);
 
-                    for (let i = 0; i < imageData.data.length; i += 4) {
-                        const pixelIndex = i / 4;
-                        frameData[pixelIndex] = imageData.data[i] / 255; // R
-                        frameData[pixelIndex + width * height] = imageData.data[i + 1] / 255; // G
-                        frameData[pixelIndex + 2 * width * height] = imageData.data[i + 2] / 255; // B
-                    }
-
-                    frameBuffer.push(frameData);
-                    if (frameBuffer.length > config.frameBufferSize) {
-                        frameBuffer.shift();
-                    }
-
-                    const tensorData = new Float32Array(config.inputShape.reduce((a, b) => a * b, 1));
-                    let offset = 0;
-                    
-                    for (let i = 0; i < config.frameBufferSize; i++) {
-                        const frame = frameBuffer[i] || new Float32Array(3 * width * height).fill(0);
-                        if (offset + frame.length > tensorData.length) {
-                            console.error('Buffer overflow prevented');
-                            break;
-                        }
-                        tensorData.set(frame, offset);
-                        offset += frame.length;
-                    }
-
-                    return new ort.Tensor('float32', tensorData, config.inputShape);
-                } else {
-                    const imageData = ctx.getImageData(0, 0, width, height);
-                    const data = new Float32Array(1 * 1 * width * height);
-
-                    for (let i = 0; i < imageData.data.length; i += 4) {
-                        const grayValue = (imageData.data[i] + imageData.data[i + 1] + imageData.data[i + 2]) / 3;
-                        data[i / 4] = grayValue / 255;
-                    }
-
-                    return new ort.Tensor('float32', data, config.inputShape);
+                for (let i = 0; i < imageData.data.length; i += 4) {
+                    const pixelIndex = i / 4;
+                    frameData[pixelIndex] = imageData.data[i] / 255;
+                    frameData[pixelIndex + width * height] = imageData.data[i + 1] / 255;
+                    frameData[pixelIndex + 2 * width * height] = imageData.data[i + 2] / 255;
                 }
+
+                frameBuffer.push(frameData);
+                if (frameBuffer.length > config.frameBufferSize) {
+                    frameBuffer.shift();
+                }
+
+                const tensorData = new Float32Array(config.inputShape.reduce((a, b) => a * b, 1));
+                let offset = 0;
+                
+                for (let i = 0; i < config.frameBufferSize; i++) {
+                    const frame = frameBuffer[i] || new Float32Array(3 * width * height).fill(0);
+                    tensorData.set(frame, offset);
+                    offset += frame.length;
+                }
+
+                return new ort.Tensor('float32', tensorData, config.inputShape);
             }
 
             function handlePredictions(predictions) {
@@ -360,7 +336,7 @@
                 try {
                     const inputTensor = preprocessFrame();
                     const results = await currentModel.run({
-                        [MODEL_CONFIG[currentModelType].inputName]: inputTensor
+                        [MODEL_CONFIG.RSL.inputName]: inputTensor
                     });
                     handlePredictions(results[Object.keys(results)[0]]);
                 } catch (error) {
@@ -373,13 +349,12 @@
 
             async function startCamera(deviceId = '') {
                 try {
-                    const config = MODEL_CONFIG[currentModelType];
                     const constraints = {
                         video: {
                             deviceId: deviceId ? { exact: deviceId } : undefined,
-                            width: { ideal: currentModelType === 'RSL' ? 224 : 28 },
-                            height: { ideal: currentModelType === 'RSL' ? 224 : 28 },
-                            frameRate: { ideal: config.frameRate },
+                            width: { ideal: 224 },
+                            height: { ideal: 224 },
+                            frameRate: { ideal: 30 },
                             facingMode: 'user'
                         }
                     };
@@ -390,7 +365,7 @@
                     document.getElementById('video-placeholder').classList.add('hidden');
                     elements.cameraError.textContent = '';
 
-                    if (await initializeModel(currentModelType)) {
+                    if (await initializeModel('RSL')) {
                         isProcessing = true;
                         lastFrameTime = performance.now();
                         requestAnimationFrame(processFrame);
@@ -434,19 +409,6 @@
                 const currentIndex = cameras.findIndex(camera => camera.deviceId === currentCameraId);
                 const newIndex = (currentIndex + 1) % cameras.length;
                 currentCameraId = cameras[newIndex].deviceId;
-
-                if (videoStream) {
-                    videoStream.getTracks().forEach(track => track.stop());
-                    elements.video.srcObject = null;
-                }
-
-                await startCamera(currentCameraId);
-            });
-
-            elements.languageSelect.addEventListener('change', async function() {
-                isProcessing = false;
-                currentModelType = this.value;
-                frameBuffer = [];
 
                 if (videoStream) {
                     videoStream.getTracks().forEach(track => track.stop());
